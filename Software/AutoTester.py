@@ -840,7 +840,7 @@ def runTitration(tester,ts,sequenceName):
 				firstpass+=1
 				if firstpass==1:
 					triggerpoint=dispenseCount
-				#break	
+				break	
 			amountToDose-=0.01
 			dispenseCount+=0.01
 		print('Exited')
@@ -997,7 +997,7 @@ def runTitration(tester,ts,sequenceName):
 					firstpass+=1
 					if firstpass==1:
 						triggerpoint=dispenseCount
-					#break
+					break
 
 				amountToDose-=0.01
 				dispenseCount+=0.01
@@ -1127,7 +1127,7 @@ def runTitration(tester,ts,sequenceName):
 
 		cleanSyringe()
 
-		tester.saveNewReagentValue(ts.titrationSlot,ts.titrationMaxAmount)
+		tester.saveNewReagentValue(ts.titrationSlot,dispenseCount)
 
 		if tester.lastReagentRemainingML<tester.reagentRemainingMLAlarmThreshold and tester.reagentAlmostEmptyAlarmEnable:
 			sendReagentAlarm(tester,ts.titrationSlot,tester.lastReagentRemainingML)
