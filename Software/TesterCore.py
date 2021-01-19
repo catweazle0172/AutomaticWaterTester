@@ -17,6 +17,7 @@ import numpy as np
 import math
 import time
 import os
+from adafruit_motorkit import MotorKit
 #import fisheye
 #from FishEyeWrapper import FishEye,load_model
 from ImageCheck import feature,colorSheet,swatch
@@ -38,6 +39,8 @@ import pytz
 import serial
 from colormath.color_objects import LabColor, AdobeRGBColor, sRGBColor
 from colormath.color_conversions import convert_color
+from DFRobot_ADS1115 import ADS1115
+from DFRobot_PH      import DFRobot_PH
 
 try:
 	from picamera.array import PiRGBArray   # @UnresolvedImport
@@ -58,19 +61,31 @@ else:
 	existsI2C=True
 	existsWebCam=True
 	
-mainPumpEnableGPIO=27
-mainPumpStepGPIO=17
-mainPumpDirectionGPIO=23
+#PLUNG mark
+KHSamplePumpEnableGPIO=27
+KHSamplePumpStepGPIO=17
+KHSamplePumpDirectionGPIO=23
 
-relay1GPIO=9
-relay2GPIO=11
-relay3GPIO=5
-relay4GPIO=6
+#CAROUSEL mark
+KHReagentPumpEnableGPIO=9
+KHReagentPumpStepGPIO=10
+KHReagentPumpDirectionGPIO=22
 
-ledGPIO=13
-agitateGPIO=19
-shakerGPIO=26
-temppumpGPIO=21
+#AGITATOR mark
+mainPumpEnableGPIO=6
+mainPumpStepGPIO=5
+mainPumpDirectionGPIO=11
+
+ads1115 = ADS1115()
+ph      = DFRobot_PH()
+
+PHsamplesBetweenTest = 5
+temperature	= 25.0
+
+#I2C
+pca60 = MotorKit(address=0x60)
+pca61 = MotorKit(address=0x61)
+pca62 = MotorKit(address=0x62)
 
 class testSequence:
 	def __init__(self,name):
@@ -101,38 +116,28 @@ class Tester:
 			GPIO.setup(mainPumpEnableGPIO,GPIO.OUT)
 			GPIO.setup(mainPumpStepGPIO,GPIO.OUT)
 			GPIO.setup(mainPumpDirectionGPIO,GPIO.OUT)
-			GPIO.setup(relay1GPIO,GPIO.OUT)
-			GPIO.setup(relay2GPIO,GPIO.OUT)
-			GPIO.setup(relay3GPIO,GPIO.OUT)
-			GPIO.setup(relay4GPIO,GPIO.OUT)
-			GPIO.setup(ledGPIO,GPIO.OUT)
-			GPIO.setup(agitateGPIO,GPIO.OUT)
-			GPIO.setup(shakerGPIO,GPIO.OUT)
-			GPIO.setup(temppumpGPIO,GPIO.OUT)
+			GPIO.setup(KHSamplePumpEnableGPIO,GPIO.OUT)
+			GPIO.setup(KHSamplePumpStepGPIO,GPIO.OUT)
+			GPIO.setup(KHSamplePumpDirectionGPIO,GPIO.OUT)
+			GPIO.setup(KHReagentPumpEnableGPIO,GPIO.OUT)
+			GPIO.setup(KHReagentPumpStepGPIO,GPIO.OUT)
+			GPIO.setup(KHReagentPumpDirectionGPIO,GPIO.OUT)
 			GPIO.output(mainPumpEnableGPIO,GPIO.HIGH)
 			GPIO.output(mainPumpStepGPIO,GPIO.LOW)
 			GPIO.output(mainPumpDirectionGPIO,GPIO.LOW)
-			GPIO.output(relay1GPIO,GPIO.HIGH)
-			GPIO.output(relay2GPIO,GPIO.HIGH)
-			GPIO.output(relay3GPIO,GPIO.HIGH)
-			GPIO.output(relay4GPIO,GPIO.HIGH)
-			GPIO.output(ledGPIO,GPIO.LOW)
-			GPIO.output(agitateGPIO,GPIO.LOW)
-			GPIO.output(shakerGPIO,GPIO.LOW)
-			GPIO.output(temppumpGPIO,GPIO.LOW)
-		self.ledOn=False
+			GPIO.output(KHSamplePumpEnableGPIO,GPIO.HIGH)
+			GPIO.output(KHSamplePumpStepGPIO,GPIO.LOW)
+			GPIO.output(KHSamplePumpDirectionGPIO,GPIO.LOW)
+			GPIO.output(KHReagentPumpEnableGPIO,GPIO.HIGH)
+			GPIO.output(KHReagentPumpStepGPIO,GPIO.LOW)
+			GPIO.output(KHReagentPumpDirectionGPIO,GPIO.LOW)
+			pca62.motor3.throttle = 1		#Close valve Tank Water
+			pca62.motor4.throttle = 1		#Close valve Osmose Water
 		self.ArduinoStepper=False
 		self.ArduinoSensor=False
 		self.hommeArduinoStepper=False
-		self.mainPumpOn=False
-		self.mainDrainPumpOn=False
-		self.cleanPumpOn=False
-		self.cleanDrainPumpOn=False
-		self.valveForOsmoseOn=False
-		self.agitatorOn=False
-		self.shakerOn=False
-		self.tempPumpOn=False
 		self.loadTesterFromDB()
+		self.loadCalibrationValuesFromDB()
 		self.loadProcessingParametersFromDB()
 		self.loadStartupParametersFromDB()
 		self.loadReagentsFromDB()
@@ -173,15 +178,8 @@ class Tester:
 		self.tooDark=False  
 		self.infoMessage('Tester Engine version ' + currentVersion + ' loaded') 
 		self.mainPumpEnabled=False
-		self.mainPumpStepsPerMM=200*2*34/12 #Stepper Motor Steps, 1/4 steps, 34 tooth outer gear, 12 tooth inner gear
-		self.mmToRaiseFromOpenToFullyClosed=5
-		self.mainPumpSteps=None
-		self.mainPumpStepping=False
-		self.mainPumpMoving=False
-		self.previousLeftStopperPosition=None
-		self.stopperMovement=None
-		self.moveCarouselLock=None
-		self.carouselSeriesLock=None
+		self.KHSamplePumpEnabled=False
+		self.KHReagentPumpEnabled=False
 		self.displayDot=False
 		self.avgGreenDotH=None
 		self.avgGreenDotS=None
@@ -224,7 +222,7 @@ class Tester:
 		self.diagnosticQueue=[]
 		self.diagnosticLock=None
 		self.systemStatus='Initializing'
-		self.flashLights()
+
 		
 	def getCameraModel(self):
 		self.cameraModelFile=self.basePath + '/Calibrate/FisheyeUndistort-(' + self.lensType + ',' + str(self.cameraHeightLowRes) + ' x ' + str(self.cameraWidthLowRes) + ')-' + sys.version[0] + '.pkl'
@@ -252,7 +250,7 @@ class Tester:
 			print(message)
 			
 	def loadTesterFromDB(self):
-		from tester.models import TesterExternal,TesterProcessingParameters
+		from tester.models import TesterExternal
 		te=TesterExternal.objects.get(pk=1)
 		self.testerName=te.testerName
 		self.testerVersion=te.testerVersion
@@ -269,8 +267,8 @@ class Tester:
 		self.mixerCleanML=te.mixerCleanML
 		self.mixerCleanCycles=te.mixerCleanCycles
 		self.mixerCleanCyclesExtraAfterHours=te.mixerCleanCyclesExtraAfterHours
-		self.stepsFor1ML=te.stepsFor1ML
-		self.reagentRemainingMLAlarmThreshold=te.reagentRemainingMLAlarmThreshold
+		self.reagentRemainingMLAlarmThresholdAutoTester=te.reagentRemainingMLAlarmThresholdAutoTester
+		self.reagentRemainingMLAlarmThresholdKHTester=te.reagentRemainingMLAlarmThresholdKHTester
 		self.reagentAlmostEmptyAlarmEnable=te.reagentAlmostEmptyAlarmEnable
 		self.pauseInSecsBeforeEmptyingMixingChamber=te.pauseInSecsBeforeEmptyingMixingChamber
 		self.telegramBotToken=te.telegramBotToken
@@ -279,7 +277,14 @@ class Tester:
 		self.daysOfResultsToKeep=te.daysOfResultsToKeep
 		self.enableConsoleOutput=te.enableConsoleOutput
 		self.manageDatabases=te.manageDatabases
-		
+
+	def loadCalibrationValuesFromDB(self):
+		from tester.models import CalibrationValues
+		cv=CalibrationValues.objects.get(pk=1)
+		self.calibrationMLAutotester=cv.calibrationMLAutotester
+		self.calibrationMLKHSample=cv.calibrationMLKHSample
+		self.calibraitonMLKHReagent=cv.calibraitonMLKHReagent
+
 	def loadProcessingParametersFromDB(self):
 		from tester.models import TesterProcessingParameters
 		tpp=TesterProcessingParameters.objects.get(pk=1)
@@ -329,6 +334,7 @@ class Tester:
 		for seq in sequenceList:
 			ts=testSequence(seq.testName)
 			ts.enableTest=seq.enableTest
+			ts.KHtestwithPHProbe=seq.KHtestwithPHProbe
 			ts.waterVolInML=seq.waterVolInML
 			ts.reagent1Slot=seq.reagent1Slot
 			if not ts.reagent1Slot is None:
@@ -474,7 +480,8 @@ class Tester:
 				tre.results=str(results)
 			whenPerformed=timezone.now()
 			tre.datetimePerformed=whenPerformed
-			tre.swatchFile='Strip-' + whenPerformed.strftime("%Y-%m-%d %H-%M-%S") + '.jpg'
+			if not swatchResultList is None:
+				tre.swatchFile='Strip-' + whenPerformed.strftime("%Y-%m-%d %H-%M-%S") + '.jpg'
 			tre.save()
 			if swatchResultList is None:
 				return True
@@ -558,7 +565,7 @@ class Tester:
 		remainingML=ReagentSetup.objects.get(slotName=reagent).fluidRemainingInML-amountToDispense
 		reagentObj=ReagentSetup.objects.get(slotName=reagent)
 		self.lastReagentRemainingML=round(remainingML,2)
-		reagentObj.fluidRemainingInML=remainingML
+		reagentObj.fluidRemainingInML=self.lastReagentRemainingML
 		reagentObj.save()
 
 	def inReagentPosition(self,reagent):
@@ -663,170 +670,140 @@ class Tester:
 			Rmat=np.array([[1.,0.,0.],[0.,1.,0.],[0.,0.,self.cameraFisheyeExpansionFactor]])
 			dst = self.cameraFisheyeModel.undistort(image, undistorted_size=(width, height),R=Rmat)
 			return dst
-		
-	def turnLedOn(self):
-		if self.simulation:
-			self.ledOn=True
-			return
-		if existsGPIO:
-			GPIO.output(ledGPIO,GPIO.HIGH)
-		self.ledOn=True
-		return
-			
-	def turnLedOff(self):
-		if self.simulation:
-			self.ledOn=False
-			return
-		if existsGPIO:
-			GPIO.output(ledGPIO,GPIO.LOW)
-		self.ledOn=False
-		return
-	
-	def flashLights(self):
-		self.turnLedOn()
-		time.sleep(.5)
-		self.turnLedOff()
-		time.sleep(.5)
-		self.turnLedOn()
-		time.sleep(.5)
-		self.turnLedOff()
-		time.sleep(.5)
-		self.turnLedOn()
-		time.sleep(.5)
-		self.turnLedOff()
-		
-	def turnMainPumpOn(self):
-		if self.simulation:
-			self.tempPumpOn=True
-			return
-		if existsGPIO:
-			GPIO.output(temppumpGPIO,GPIO.HIGH)
-		self.tempPumpOn=True
-		return
-			
-	def turnMainPumpOff(self):
-		if self.simulation:
-			self.tempPumpOn=False
-			return
-		if existsGPIO:
-			GPIO.output(temppumpGPIO,GPIO.LOW)
-		self.tempPumpOn=False
-		return
 
-	def turnMainDrainPumpOn(self):
-		if self.simulation:
-			self.mainDrainPumpOn=True
-			return
-		if existsGPIO:
-			GPIO.output(relay1GPIO,GPIO.LOW)
+	def mainDrainPump(self,sec):
+		pca61.motor2.throttle = 1
 		self.MainDrainPumpOn=True
-		return
-			
-	def turnMainDrainPumpOff(self):
-		if self.simulation:
-			self.mainDrainPumpOn=False
-			return
-		if existsGPIO:
-			GPIO.output(relay1GPIO,GPIO.HIGH)
+		time.sleep(sec)
+		pca61.motor2.throttle = 0
 		self.MainDrainPumpOn=False
-		return        
-
-	def turnCleanPumpOn(self):
-		if self.simulation:
-			self.cleanPumpOn=True
-			return
-		if existsGPIO:
-			GPIO.output(relay2GPIO,GPIO.LOW)
-		self.cleanPumpOn=True
 		return
-			
-	def turnCleanPumpOff(self):
-		if self.simulation:
-			self.cleanPumpOn=False
-			return
-		if existsGPIO:
-			GPIO.output(relay2GPIO,GPIO.HIGH)
-		self.cleanPumpOn=False
-		return 
 
-	def turnCleanDrainPumpOn(self):
-		if self.simulation:
+	def osmoseCleanPump(self,sec):
+		pca61.motor3.throttle = -1
+		self.cleanPumpOn=True
+		time.sleep(sec)
+		pca61.motor3.throttle = 0
+		self.cleanPumpOn=False
+		return
+
+	def cleanDrainPump(self,sec):
+		if sec==0:
+			pca61.motor4.throttle = 1
 			self.cleanDrainPumpOn=True
 			return
-		if existsGPIO:
-			GPIO.output(relay3GPIO,GPIO.LOW)
-		self.cleanDrainPumpOn=True
-		return
-			
-	def turnCleanDrainPumpOff(self):
-		if self.simulation:
+		else: 	
+			pca61.motor4.throttle = 1
+			self.cleanDrainPumpOn=True
+			time.sleep(sec)
+			pca61.motor4.throttle = 0
 			self.cleanDrainPumpOn=False
 			return
-		if existsGPIO:
-			GPIO.output(relay3GPIO,GPIO.HIGH)
+			
+	def cleanDrainPumpOff(self):
+		pca61.motor4.throttle = 0
 		self.cleanDrainPumpOn=False
 		return
 
-	def turnValveForOsmoseOn(self):
-		if self.simulation:
-			self.valveForOsmoseOn=True
-			return
-		if existsGPIO:
-			GPIO.output(relay4GPIO,GPIO.LOW)
-		self.valveForOsmoseOn=True
-		return
-
-	def turnValveForOsmoseOff(self):
-		if self.simulation:
-			self.valveForOsmoseOn=False
-			return
-		if existsGPIO:
-			GPIO.output(relay4GPIO,GPIO.HIGH)
-		self.valveForOsmoseOn=False
-		return
-
-	def turnAgitatorOn(self):
-		if self.simulation:
+	def turnAgitator(self,sec):
+		if sec==0:
+			pca61.motor1.throttle = 0.25
 			self.agitatorOn=True
 			return
-		if existsGPIO:
-			GPIO.output(agitateGPIO,GPIO.HIGH)
-		self.agitatorOn=True
-		return
-
-	def turnAgitatorOff(self):
-		if self.simulation:
+		else: 	
+			pca61.motor1.throttle = 0.25
+			self.agitatorOn=True
+			time.sleep(sec)
+			pca61.motor1.throttle = 0
 			self.agitatorOn=False
 			return
-		if existsGPIO:
-			GPIO.output(agitateGPIO,GPIO.LOW)
+
+	def turnAgitatorOff(self):
+		pca61.motor1.throttle = 0
 		self.agitatorOn=False
 		return
 
-	def turnShakerOn(self):
-		if self.simulation:
-			self.shakerOn=True
-			return
-		if existsGPIO:
-			GPIO.output(shakerGPIO,GPIO.HIGH)
-		self.shakerOn=True
-		return
-
-	def turnShakerOff(self):
-		if self.simulation:
-			self.shakerOn=False
-			return
-		if existsGPIO:
-			GPIO.output(shakerGPIO,GPIO.LOW)
-		self.shakerOn=False
-		return
-	
-	def fillMixingReactor(self,ml):
-		if self.simulation:
+	def calibrateAutoTesterPump(self):
+		pca62.motor3.throttle = 0		#Open valve Tank Water
+		pca62.motor4.throttle = 1		#Close valve Osmose Water
+		if not self.mainPumpEnabled:
+			GPIO.output(mainPumpEnableGPIO,GPIO.LOW)
+			time.sleep(.0005)
 			self.mainPumpEnabled=True
-			return
 
-		time.sleep(.5)
+		GPIO.output(mainPumpDirectionGPIO,GPIO.LOW)
+		stepCountThisPump=0
+		stepDelay=.0001
+		stepsToPump=100000
+		print (stepsToPump)
+
+		while stepCountThisPump<stepsToPump:
+			GPIO.output(mainPumpStepGPIO,GPIO.HIGH)
+			time.sleep(stepDelay)
+			GPIO.output(mainPumpStepGPIO,GPIO.LOW)
+			time.sleep(stepDelay)
+			stepCountThisPump+=1
+
+		self.mainPumpEnabled=False     
+		GPIO.output(mainPumpEnableGPIO,GPIO.HIGH)
+		pca62.motor3.throttle = 1		#Close valve Tank Water
+		pca62.motor4.throttle = 1		#Close valve Osmose Water
+		return True  
+
+	def calibrateKHSamplePump(self):
+		if not self.KHSamplePumpEnabled:
+			GPIO.output(KHSamplePumpEnableGPIO,GPIO.LOW)
+			time.sleep(.0005)
+			self.KHSamplePumpEnabled=True
+
+		GPIO.output(KHSamplePumpDirectionGPIO,GPIO.HIGH)
+		stepCountThisPump=0
+		stepDelay=.00001
+		stepsToPump=582000
+		print (stepsToPump)
+
+		while stepCountThisPump<stepsToPump:
+			GPIO.output(KHSamplePumpStepGPIO,GPIO.HIGH)
+			time.sleep(stepDelay)
+			GPIO.output(KHSamplePumpStepGPIO,GPIO.LOW)
+			time.sleep(stepDelay)
+			stepCountThisPump+=1
+
+		self.KHSamplePumpEnabled=False     
+		GPIO.output(KHSamplePumpEnableGPIO,GPIO.HIGH)
+		return True
+
+	def calibrateKHReagentPump(self):
+		if not self.KHReagentPumpEnabled:
+			GPIO.output(KHReagentPumpEnableGPIO,GPIO.LOW)
+			time.sleep(.0005)
+			self.KHReagentPumpEnabled=True
+
+		GPIO.output(KHReagentPumpDirectionGPIO,GPIO.HIGH)
+		stepCountThisPump=0
+		stepDelay=.00001
+		stepsToPump=260000
+		print (stepsToPump)
+
+		while stepCountThisPump<stepsToPump:
+			GPIO.output(KHReagentPumpStepGPIO,GPIO.HIGH)
+			time.sleep(stepDelay)
+			GPIO.output(KHReagentPumpStepGPIO,GPIO.LOW)
+			time.sleep(stepDelay)
+			stepCountThisPump+=1
+
+		self.KHReagentPumpEnabled=False     
+		GPIO.output(KHReagentPumpEnableGPIO,GPIO.HIGH)
+		return True  
+
+	def MixerReactorPump(self,ml,water):
+		RampUpTimeDelay = 0.005
+		if water is 'tankwater':
+			pca62.motor3.throttle = 0		#Open valve Tank Water
+			pca62.motor4.throttle = 1		#Close valve Osmose Water
+		elif water is 'osmosewater':
+			pca62.motor3.throttle = 1		#Close valve Tank Water
+			pca62.motor4.throttle = 0		#Open valve Osmose Water
 
 		if not self.mainPumpEnabled:
 			GPIO.output(mainPumpEnableGPIO,GPIO.LOW)
@@ -840,24 +817,91 @@ class Tester:
 			stepIncrement=-1
 
 		stepCountThisPump=0
-		stepDelay=.0002
-        
-		stepsToPump=self.stepsFor1ML*ml
-		self.mainPumpStepping=True
+		stepDelay=.000025
+
+		stepsfor1ml=int(100000 / self.calibrationMLAutotester)
+
+		stepsToPump=ml*stepsfor1ml
 		print (stepsToPump)
 
 		while stepCountThisPump<stepsToPump:
-
 			GPIO.output(mainPumpStepGPIO,GPIO.HIGH)
-
 			time.sleep(stepDelay)
 			GPIO.output(mainPumpStepGPIO,GPIO.LOW)
 			time.sleep(stepDelay)
 			stepCountThisPump+=1
 
-		self.mainPumpEnabled=False     
-
+			if RampUpTimeDelay > 0.0001:
+				RampUpTimeDelay-=0.0001
+				time.sleep(RampUpTimeDelay)
+  
 		GPIO.output(mainPumpEnableGPIO,GPIO.HIGH)
+		self.mainPumpEnabled=False
+		pca62.motor3.throttle = 1		#Close valve Tank Water
+		pca62.motor4.throttle = 1		#Close valve Osmose Water
+		return True  
+
+	def sampleWaterPumpCommand(self,ml):
+		RampUpTimeDelay = 0.01
+		if not self.KHSamplePumpEnabled:
+			GPIO.output(KHSamplePumpEnableGPIO,GPIO.LOW)
+			time.sleep(.0005)
+			self.KHSamplePumpEnabled=True
+		if ml>0:
+			GPIO.output(KHSamplePumpDirectionGPIO,GPIO.HIGH)
+		else:
+			GPIO.output(KHSamplePumpDirectionGPIO,GPIO.LOW)
+			ml*=-1
+
+		stepCountThisPump=0
+		stepDelay=.00001
+		stepsfor1ml=int(582000 / self.calibrationMLKHSample)
+		stepsToPump=ml*stepsfor1ml
+		print (stepsToPump)	
+
+		while stepCountThisPump<stepsToPump:
+			GPIO.output(KHSamplePumpStepGPIO,GPIO.HIGH)
+			time.sleep(stepDelay)
+			GPIO.output(KHSamplePumpStepGPIO,GPIO.LOW)
+			time.sleep(stepDelay)
+			stepCountThisPump+=1
+
+			if RampUpTimeDelay > 0.0001:
+				RampUpTimeDelay-=0.0001
+				time.sleep(RampUpTimeDelay)
+
+		GPIO.output(KHSamplePumpEnableGPIO,GPIO.HIGH)
+		self.KHSamplePumpEnabled=False
+		return True  
+
+	def reagentPumpCommand(self,ml):
+		RampUpTimeDelay = 0.01
+		if not self.KHReagentPumpEnabled:
+			GPIO.output(KHReagentPumpEnableGPIO,GPIO.LOW)
+			time.sleep(.0005)
+			self.KHReagentPumpEnabled=True
+		if ml>0:
+			GPIO.output(KHReagentPumpDirectionGPIO,GPIO.HIGH)
+
+		stepCountThisPump=0
+		stepDelay=.00002
+		stepsfor1ml=int(260000 / self.calibraitonMLKHReagent)
+		stepsToPump=ml*stepsfor1ml
+		print (stepsToPump)
+
+		while stepCountThisPump<stepsToPump:
+			GPIO.output(KHReagentPumpStepGPIO,GPIO.HIGH)
+			time.sleep(stepDelay)
+			GPIO.output(KHReagentPumpStepGPIO,GPIO.LOW)
+			time.sleep(stepDelay)
+			stepCountThisPump+=1
+
+			if RampUpTimeDelay > 0.0001:
+				RampUpTimeDelay-=0.0001
+				time.sleep(RampUpTimeDelay)
+
+		GPIO.output(KHReagentPumpEnableGPIO,GPIO.HIGH)
+		self.KHReagentPumpEnabled=False
 		return True  
 			                    
 	def getID(self):
@@ -1145,6 +1189,12 @@ class Tester:
 
 		if (Bvalue > 1):
 			Bvalue=1
+
+		R255=255-(Rvalue*255)
+		G255=255-(Gvalue*255)
+		B255=255-(Bvalue*255)
+
+		rgb255=(R255,G255,B255)
 		
 		Rvalue1 = (1-Rvalue)
 		Gvalue1 = (1-Gvalue)
@@ -1152,7 +1202,7 @@ class Tester:
 
 		rgb=sRGBColor(Rvalue1,Gvalue1,Bvalue1)
 		lab = convert_color(rgb, LabColor)
-		return lab.lab_l,lab.lab_a,lab.lab_b
+		return lab.lab_l,lab.lab_a,lab.lab_b,rgb255
 
 	def calculateLastTest(self):
 		from tester.models import TestResultsExternal
@@ -1162,6 +1212,46 @@ class Tester:
 		if lastTestResultWithExtraTime <= dt.now():
 			return True
 
+	def drainPumpCommand(self,sec):
+		pca60.motor1.throttle = 1.0
+		time.sleep(sec)
+		pca60.motor1.throttle = 0
+
+	def mixerJarMotorCommand(self,sec):
+		pca60.motor3.throttle = 0.55
+		time.sleep(sec)
+		pca60.motor3.throttle = 0
+
+	def mixerJarMotorCommandManual(self,speed):
+		pca60.motor3.throttle = speed
+
+	def mixerReagentBottleMotorCommand(self,sec):
+		pca60.motor4.throttle = 1.0
+		time.sleep(sec)
+		pca61.motor4.throttle = 0
+
+	def read_ph(self):
+		temperature=25
+		ads1115.setAddr_ADS1115(0x4A)
+		ads1115.setGain(0x00)
+		ph.begin()
+		PHTOTAL = 0
+		stepx=0
+		while stepx < PHsamplesBetweenTest:
+			time.sleep(1)
+			adc0 = ads1115.readVoltage(0)
+			PHTOTAL+=ph.readPH(adc0['r'],temperature)
+			stepx+=1
+		phresult=round(PHTOTAL/PHsamplesBetweenTest,2)
+		return phresult
+
+	def calibratePH(self):
+		ph.begin()
+		ads1115.setAddr_ADS1115(0x4A)
+		ads1115.setGain(0x00)
+		adc0 = ads1115.readVoltage(0)
+		print ("A0:%dmV "%(adc0['r']))
+		ph.calibration(adc0['r'])
 
 def getBasePath():
 	programPath=os.path.realpath(__file__)

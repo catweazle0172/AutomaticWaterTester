@@ -11,7 +11,8 @@ This module receives commands from the Web interface and executes them.
 @author: Stephen Hayes
 '''
 
-from AutoTester import  osmoseCleanMixerReactor,runTestSequence,loadFeatureWindow,evaluateResults,queueTestJob
+from AutoTester import  osmoseCleanMixerReactor,runTestSequence,loadFeatureWindow,evaluateResults,queueTestJob,CalibratePH
+from TesterCore import Tester
 
 from ImageCheck import swatch,colorSheet
 
@@ -163,12 +164,30 @@ def parseControl(tester,cmdOperation,cmdObject,cmdValue):
         elif cmdOperation=='Clean':
             osmoseCleanMixerReactor(tester)                     
         elif cmdOperation=='Fill5ML':
-            tester.fillMixingReactor(5)  
+            tester.MixerReactorPump(5)  
 
         else:
             print('Unknown CONTROL operation: ' + cmdOperation) 
     except:                  
-        tester.debugLog.exception("Error in CONTROL parsing")
+ 
+       tester.debugLog.exception("Error in CONTROL parsing")
+
+def parseCalibrate(tester,cmdOperation,cmdObject,cmdValue):
+    try:
+        if cmdOperation=='DoseAutoTester':
+            tester.calibrateAutoTesterPump()
+        elif cmdOperation=='DoseKHSample':
+            tester.calibrateKHSamplePump()
+        elif cmdOperation=='DoseKHReagent':
+            tester.calibrateKHReagentPump()
+        elif cmdOperation=='CalPH4':
+            CalibratePH(tester)
+        elif cmdOperation=='CalPH7':
+            CalibratePH(tester)
+        else:                     
+            print('Unknown CALIBRATION operation: ' + cmdOperation)                   
+    except:
+        tester.debugLog.exception("Error in CALIBRATION parsing")
         
 def queueDiagnosticTest(tester,cmdOperation,cmdObject):
     tester.diagnosticLock.acquire()

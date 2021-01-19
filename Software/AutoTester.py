@@ -44,10 +44,14 @@ tester=None
 letterSequenceCheck={'A':'B','B':'C','C':'D','D':'E','E':'F','F':'G','G':'H','H':'I','I':'J','J':'K','K':'L','L':'A'}
 Mixerreactor='Mixerreactor'
 Cleanreactor='Cleanreactor'
-CentimeterToMove={'A':0,'B':3.7,'C':7.3,'D':11,'E':14.8,'F':18.5,'G':22,'H':25.7,'I':29.7,'J':33.2,'K':36.9,'L':40.4,'M':44.4,'Cleanreactor':48,'Mixerreactor':51.2}
+osmosewater='osmosewater'
+tankwater='tankwater'
+CentimeterToMove={'A':0,'B':3.7,'C':7.8,'D':11.4,'E':15.4,'F':19,'G':22.5,'H':26.2,'I':30,'J':33.8,'K':37.3,'L':40.8,'M':44.8,'Cleanreactor':48.4,'Mixerreactor':51.6}
 destinationLetters='ABCDEFGHIJKLM'
 airInSyringe=0.00 #was 0.07
 syringeTolorance=0.03
+rgb=255,255,255
+PH='-'
 
 def screenPresent(name):
 	from subprocess import check_output
@@ -186,11 +190,14 @@ class TesterViewer(BaseHTTPRequestHandler):
 					else:
 						imageCopy=tester.latestLowResImage.copy()
 						tester.videoLowResCaptureLock.release()
-						cv2.putText(imageCopy,'System Status: ' + tester.systemStatus,(20,25), font, .75,(255,255,255),2,cv2.LINE_AA)                    
+						cv2.putText(imageCopy,'System Status: ' + tester.systemStatus,(10,25), font, .75,(255,255,255),2,cv2.LINE_AA)
+						cv2.putText(imageCopy,'Last PH: ' + str(PH),(10,630), font, .75,(255,255,255),2,cv2.LINE_AA)
+						x,y,w,h = 350,630,175,75
+						cv2.rectangle(imageCopy, (x, 560), (x + w, y + h), (rgb), -1)
 						if not tester.testStatus is None:
 							try:
 								cv2.putText(imageCopy,"Running Test: " + tester.currentTest,(20,55), font, .75,(255,255,255),2,cv2.LINE_AA)
-								cv2.putText(imageCopy,tester.testStatus,(20,85), font, .75,(255,255,255),2,cv2.LINE_AA)                                
+								cv2.putText(imageCopy,tester.testStatus,(10,85), font, .75,(255,255,255),2,cv2.LINE_AA)                                
 							except:
 								tester.debugLog.exception("Error displaying test Status")
 
@@ -271,7 +278,7 @@ def saveTopDripList(tester):
 def testFillingMixer(tester):
 	randomLevel=random.randint(4,7)
 	tester.debugLog.info('Test filling mixer to level: ' + str(randomLevel))
-	result=tester.fillMixingReactor(randomLevel)
+	result=tester.MixerReactorPump(randomLevel)
 	return result
 
 def testMixerFill(tester,numCycles):
@@ -287,15 +294,12 @@ def testMixerFill(tester,numCycles):
 			tester.debugLog.info('Cycle completion: Failed')
 			failureCount+=1
 		testNum+=1
-	tester.turnMainDrainPumpOn()
-	time.sleep(6)
-	tester.turnMainDrainPumpOff()
+	tester.mainDrainPump(6)
 	tester.debugLog.info('All test cycles completed. Success: ' + str(successCount) + ', Failures: ' + str(failureCount))            
 	
 def orientTester():
 	tester.connectArduinoStepper()
 	tester.connectArduinoSensor()
-	tester.turnLedOn()
 	tester.homingArduinoStepper()
 	tester.infoMessage('Homing Arduino Stepper done')
 	tester.systemStatus="Idle"
@@ -320,13 +324,9 @@ def cleanSyringe():
 		sendUnableToRotateAlarm(tester,ts.titrationSlot,testName)
 		return False
 
-	tester.turnCleanPumpOn()
-	time.sleep(6)
-	tester.turnCleanPumpOff()	
+	tester.osmoseCleanPump(6)
 
-	tester.turnAgitatorOn()
-	time.sleep(2)
-	tester.turnAgitatorOff()
+	tester.turnAgitator(2)
 
 	tester.infoMessage('Get Osmose Water to flush the Syringe') 
 	tester.testStatus='Get Osmose Water to flush the Syringe'
@@ -377,8 +377,8 @@ def cleanSyringe():
 		sendUnableFillSyringes(tester,ts.titrationSlot,testName)
 		return False
 
-	tester.turnAgitatorOn()
-	tester.turnCleanDrainPumpOn()	
+	tester.turnAgitator(0)
+	tester.cleanDrainPump(0)	
 
 	tester.infoMessage('Upper the Syringe out of the CleaningReactor') 
 	tester.testStatus='Upper the Syringe out of the CleaningReactor'
@@ -388,12 +388,8 @@ def cleanSyringe():
 		sendUnableToRotateAlarm(tester,ts.titrationSlot,testName)
 		return False
 
-	tester.turnShakerOn()
-	time.sleep(1)
-	tester.turnShakerOff()	
-
 	time.sleep(2)
-	tester.turnCleanDrainPumpOff()
+	tester.cleanDrainPumpOff()
 	tester.turnAgitatorOff()
 
 	tester.infoMessage('Get stuck liqued out of Syringe') 
@@ -417,10 +413,8 @@ def cleanMixerReactor(tester):
 		success=tester.UpperSyringes()
 		TargetXas=CentimeterToMove[Mixerreactor]
 		success=tester.XtoTargetReagent(TargetXas)
-		tester.turnMainDrainPumpOn()
-		time.sleep(8)
-		tester.turnMainDrainPumpOff()
-		tester.turnAgitatorOn()
+		tester.mainDrainPump(8)
+		tester.turnAgitator(0)
 		cleanCycle=0
 
 		doubleCleanCycle=tester.calculateLastTest()
@@ -430,12 +424,9 @@ def cleanMixerReactor(tester):
 			tester.testStatus='Extra Cleaning the Mixer'
 
 		while cleanCycle<tester.mixerCleanCycles:
-			tester.turnValveForOsmoseOff()
 			time.sleep(.5)
-			tester.fillMixingReactor(tester.mixerCleanML)
-			tester.turnMainDrainPumpOn()
-			time.sleep(12)
-			tester.turnMainDrainPumpOff()
+			tester.MixerReactorPump(tester.mixerCleanML,tankwater)
+			tester.mainDrainPump(12)
 			cleanCycle+=1
 		tester.turnAgitatorOff()
 	except:
@@ -446,18 +437,13 @@ def osmoseCleanMixerReactor(tester):
 		success=tester.UpperSyringes()
 		TargetXas=CentimeterToMove[Mixerreactor]
 		success=tester.XtoTargetReagent(TargetXas)
-		tester.turnMainDrainPumpOn()
-		time.sleep(8)
-		tester.turnMainDrainPumpOff()
-		tester.turnAgitatorOn()
+		tester.mainDrainPump(8)
+		tester.turnAgitator(0)
 		cleanCycle=0
 		while cleanCycle<tester.mixerCleanCycles:
-			tester.turnValveForOsmoseOn()
 			time.sleep(.5)
-			tester.fillMixingReactor(tester.mixerCleanML)
-			tester.turnMainDrainPumpOn()
-			time.sleep(12)
-			tester.turnMainDrainPumpOff()
+			tester.MixerReactorPump(tester.mixerCleanML,osmosewater)
+			tester.mainDrainPump(12)
 			cleanCycle+=1
 		tester.turnAgitatorOff()
 	except:
@@ -479,7 +465,9 @@ def evaluateResultsBinary(tester,colorChartToUse):
 	tester.videoLowResCaptureLock.wait()
 	imageCopy=tester.latestLowResImage.copy()
 	tester.videoLowResCaptureLock.release()
-	rs=evaluateColorBinary(tester,imageCopy,colorChartToUse)
+	global rgb
+	l,a,b,rgb=tester.measureArduinoSensor()
+	rs=evaluateColorBinary(tester,imageCopy,colorChartToUse,l,a,b)
 	if rs.valueAtSwatch<0:
 		rs.valueAtSwatch=0
 	tester.infoMessage('Result was: ' + str(rs.valueAtSwatch)) 
@@ -526,13 +514,13 @@ def runTestStep(tester,testStepNumber,testName,waterVolInML,reagentSlot,agitateR
 				
 			tester.infoMessage('Filling the Mixing Cylinder') 
 			tester.testStatus='Filling the Mixing Cylinder'
-			fillResult=tester.fillMixingReactor(waterVolInML)
-			tester.calibrateArduinoSensor()
+			fillResult=tester.MixerReactorPump(waterVolInML,tankwater)
 			if not fillResult:
 				tester.debugLog.info("Failure filling cylinder")
 				sendFillAlarm(tester,testName)
 				return False
 
+			tester.calibrateArduinoSensor()
 
 		cleanSyringeBeforeTest=tester.calculateLastTest()
 		if cleanSyringeBeforeTest==True:
@@ -550,9 +538,7 @@ def runTestStep(tester,testStepNumber,testName,waterVolInML,reagentSlot,agitateR
 		if agitateReagentSecs>0:
 			tester.infoMessage('Agitating the Reagent for ' + str(agitateReagentSecs) + ' secs.') 
 			tester.testStatus='Agitating the Reagent for ' + str(agitateReagentSecs) + ' secs.'
-			tester.turnAgitatorOn()
-			time.sleep(agitateReagentSecs)
-			tester.turnAgitatorOff()
+			tester.turnAgitator(agitateReagentSecs)
 
 		#success=tester.fillSyringes(airInSyringe) Oude voor lucht
 		success=tester.fillSyringes(amountToDispense)
@@ -620,9 +606,7 @@ def runTestStep(tester,testStepNumber,testName,waterVolInML,reagentSlot,agitateR
 			while True:
 				if mlToDispense>0:
 					success=tester.fillSyringes(mlToDispense)
-					tester.turnAgitatorOn()
-					time.sleep(AgitateSecsBetweenDrips)
-					tester.turnAgitatorOff()
+					tester.turnAgitator(AgitateSecsBetweenDrips)
 					mlToDispense-=0.01
 				else:
 					break
@@ -646,13 +630,11 @@ def runTestStep(tester,testStepNumber,testName,waterVolInML,reagentSlot,agitateR
 		if agitateMixerSecs>0:
 			tester.infoMessage('Agitating the Mixerreactor for ' + str(agitateMixerSecs) + ' secs.') 
 			tester.testStatus='Agitating the Mixerreactor for ' + str(agitateMixerSecs) + ' secs.'
-			tester.turnAgitatorOn()
-			time.sleep(agitateMixerSecs)
-			tester.turnAgitatorOff()
+			tester.turnAgitator(agitateMixerSecs)
 
 		tester.saveNewReagentValue(reagentSlot,amountToDispense)
 
-		if tester.lastReagentRemainingML<tester.reagentRemainingMLAlarmThreshold and tester.reagentAlmostEmptyAlarmEnable:
+		if tester.lastReagentRemainingML<tester.reagentRemainingMLAlarmThresholdAutoTester and tester.reagentAlmostEmptyAlarmEnable:
 			sendReagentAlarm(tester,reagentSlot,tester.lastReagentRemainingML)
 
 		cleanSyringe()
@@ -671,9 +653,10 @@ def getDirectReadResults(tester,ts,sequenceName):
 		TargetXas=CentimeterToMove[Mixerreactor]
 		success=tester.XtoTargetReagent(TargetXas)
 		tester.testStatus='Agitating the Mixture for ' + str(ts.agitateMixtureSecs) + ' secs.'
-		tester.turnAgitatorOn()
-		time.sleep(ts.agitateMixtureSecs)
-		tester.turnAgitatorOff()
+		tester.turnAgitator(ts.agitateMixtureSecs)
+	global rgb
+	l,a,b,rgb=tester.measureArduinoSensor()
+
 	timeRemaining=ts.delayBeforeReadingSecs-ts.agitateMixtureSecs
 	while timeRemaining>0:
 		tester.testStatus='Waiting ' + str(timeRemaining) + ' secs before reading mixture.'
@@ -693,18 +676,22 @@ def getDirectReadResults(tester,ts,sequenceName):
 		sendEvaluateAlarm(tester,sequenceName)
 		tester.debugLog.exception("Failure evaluating")
 	checkTestRange(tester,ts,results)
+	
+	l,a,b,rgb=tester.measureArduinoSensor()
+
 	time.sleep(tester.pauseInSecsBeforeEmptyingMixingChamber)
+
 	if testSucceeded:
 		tester.testStatus='Result was: %.2f' % results + ' - Emptying chamber'
 	else:
 		tester.testStatus='Test Failed'
-	tester.turnMainDrainPumpOn()
-	time.sleep(6)
-	tester.turnMainDrainPumpOff()
-	time.sleep(4)
+	tester.mainDrainPump(6)
 	return results
 
 def runTitration(tester,ts,sequenceName):
+	global rgb
+	l,a,b,rgb=tester.measureArduinoSensor()
+
 	try:
 		if ts.agitateMixtureSecs>0:
 			success=tester.UpperSyringes()
@@ -712,9 +699,7 @@ def runTitration(tester,ts,sequenceName):
 			success=tester.XtoTargetReagent(TargetXas)
 			tester.infoMessage('Agitating the Mixerreactor for ' + str(ts.agitateMixtureSecs) + ' secs.') 
 			tester.testStatus='Agitating the Mixerreactor for ' + str(ts.agitateMixtureSecs) + ' secs.'
-			tester.turnAgitatorOn()
-			time.sleep(ts.agitateMixtureSecs)
-			tester.turnAgitatorOff()
+			tester.turnAgitator(ts.agitateMixtureSecs)
 
 		tester.infoMessage('Move to Titration Reagent ' + str(ts.titrationSlot)) 
 		tester.testStatus='Move to Titration Reagent ' + str(ts.titrationSlot)
@@ -728,9 +713,7 @@ def runTitration(tester,ts,sequenceName):
 		if ts.titrationAgitateSecs>0:
 			tester.infoMessage('Agitating the Titration Reagent for ' + str(ts.titrationAgitateSecs) + ' secs.') 
 			tester.testStatus='Agitating the Titration Reagent for ' + str(ts.titrationAgitateSecs) + ' secs.'
-			tester.turnAgitatorOn()
-			time.sleep(ts.titrationAgitateSecs)
-			tester.turnAgitatorOff()
+			tester.turnAgitator(ts.titrationAgitateSecs)
 
 		tester.infoMessage('Get Reagent Liquid ' + str(ts.titrationSlot)) 
 		tester.testStatus='Get Reagent Liquid ' + str(ts.titrationSlot)
@@ -827,9 +810,7 @@ def runTitration(tester,ts,sequenceName):
 			success=tester.fillSyringes(amountToDose+airInSyringe)
 			tester.testStatus='Processing with dispense = ' + str(round(dispenseCount,2))
 			if ts.titrationAgitateMixerSecs>0:
-				tester.turnAgitatorOn()
-				time.sleep(ts.titrationAgitateMixerSecs)
-				tester.turnAgitatorOff()
+				tester.turnAgitator(ts.titrationAgitateMixerSecs)
 			time.sleep(0.5)
 			rs=evaluateResultsBinary(tester,ts.colorChartToUse)
 			rs.swatchDropCount=round(dispenseCount,2)
@@ -871,13 +852,9 @@ def runTitration(tester,ts,sequenceName):
 				sendUnableToRotateAlarm(tester,ts.titrationSlot,testName)
 				return False
 
-			tester.turnCleanPumpOn()
-			time.sleep(6)
-			tester.turnCleanPumpOff()
+			tester.osmoseCleanPump(6)
 
-			tester.turnAgitatorOn()
-			time.sleep(2)
-			tester.turnAgitatorOff()
+			tester.turnAgitator(2)
 
 			tester.infoMessage('Get Osmose Water to flush the Syringe') 
 			tester.testStatus='Get Osmose Water to flush the Syringe'
@@ -895,8 +872,8 @@ def runTitration(tester,ts,sequenceName):
 				sendUnableFillSyringes(tester,ts.titrationSlot,testName)
 				return False
 
-			tester.turnAgitatorOn()
-			tester.turnCleanDrainPumpOn()
+			tester.turnAgitator(0)
+			tester.cleanDrainPump(0)
 
 			tester.infoMessage('Upper the Syringe out of the CleaningReactor') 
 			tester.testStatus='Upper the Syringe out of the CleaningReactor'
@@ -906,11 +883,7 @@ def runTitration(tester,ts,sequenceName):
 				sendUnableToRotateAlarm(tester,ts.titrationSlot,testName)
 				return False
 
-			tester.turnShakerOn()
-			time.sleep(1)
-			tester.turnShakerOff()
-
-			tester.turnCleanDrainPumpOff()
+			tester.cleanDrainPumpOff()
 			tester.turnAgitatorOff()
 
 			tester.infoMessage('Move to Titration Reagent ' + str(ts.titrationSlot)) 
@@ -925,15 +898,10 @@ def runTitration(tester,ts,sequenceName):
 			if ts.titrationAgitateSecs>0:
 				tester.infoMessage('Agitating the Titration Reagent for ' + str(ts.titrationAgitateSecs) + ' secs.') 
 				tester.testStatus='Agitating the Titration Reagent for ' + str(ts.titrationAgitateSecs) + ' secs.'
-				tester.turnAgitatorOn()
-				time.sleep(ts.titrationAgitateSecs/2)
-				tester.turnAgitatorOff()
+				tester.turnAgitator(ts.titrationAgitateSecs/2)
 
 			#success=tester.fillSyringes(airInSyringe) Oude voor lucht
 			success=tester.fillSyringes(titrationsecondamount)
-
-
-
 
 			tester.infoMessage('Lower the Syringe in the Reagent ' + str(ts.titrationSlot)) 
 			tester.testStatus='Lower the Syringe in the Reagent ' + str(ts.titrationSlot)
@@ -984,9 +952,7 @@ def runTitration(tester,ts,sequenceName):
 				success=tester.fillSyringes(amountToDose+airInSyringe)
 				tester.testStatus='Processing with dispense = ' + str(round(dispenseCount,2))
 				if ts.titrationAgitateMixerSecs>0:
-					tester.turnAgitatorOn()
-					time.sleep(ts.titrationAgitateMixerSecs)
-					tester.turnAgitatorOff()
+					tester.turnAgitator(ts.titrationAgitateMixerSecs)
 				time.sleep(0.5)
 				rs=evaluateResultsBinary(tester,ts.colorChartToUse)
 				rs.swatchDropCount=round(dispenseCount,2)
@@ -1054,18 +1020,15 @@ def runTitration(tester,ts,sequenceName):
 				sendUnableToRotateAlarm(tester,ts.titrationSlot,testName)
 				return False
 
-			tester.turnCleanPumpOn()
-			time.sleep(6)
-			tester.turnCleanPumpOff()
+			tester.osmoseCleanPump(6)
 
-			tester.turnAgitatorOn()
+			tester.turnAgitator(0)
 
 			amountToDose-=0.01
 			success=tester.fillSyringes(amountToDose+airInSyringe)
 			time.sleep(1)
 
-			tester.turnAgitatorOn()
-			tester.turnCleanDrainPumpOn()
+			tester.cleanDrainPump(0)
 
 			tester.infoMessage('Upper the Syringe out of the CleaningReactor') 
 			tester.testStatus='Upper the Syringe out of the CleaningReactor'
@@ -1075,12 +1038,8 @@ def runTitration(tester,ts,sequenceName):
 				sendUnableToRotateAlarm(tester,ts.titrationSlot,testName)
 				return False
 
-			tester.turnShakerOn()
-			time.sleep(1)
-			tester.turnShakerOff()
-
 			time.sleep(2)
-			tester.turnCleanDrainPumpOff()
+			tester.cleanDrainPumpOff()
 			tester.turnAgitatorOff()
 
 			tester.infoMessage('Move to Titration Reagent ' + str(ts.titrationSlot)) 
@@ -1129,21 +1088,135 @@ def runTitration(tester,ts,sequenceName):
 
 		tester.saveNewReagentValue(ts.titrationSlot,dispenseCount)
 
-		if tester.lastReagentRemainingML<tester.reagentRemainingMLAlarmThreshold and tester.reagentAlmostEmptyAlarmEnable:
+		if tester.lastReagentRemainingML<tester.reagentRemainingMLAlarmThresholdAutoTester and tester.reagentAlmostEmptyAlarmEnable:
 			sendReagentAlarm(tester,ts.titrationSlot,tester.lastReagentRemainingML)
 		return results
 	except:
 		time.sleep(1)
-		tester.turnMainDrainPumpOn()
-		time.sleep(6)
-		tester.turnMainDrainPumpOff()
+		tester.mainDrainPump(6)
 
 		tester.debugLog.exception('Failure when running Titration Step')
 		return None
+
+def runKHTest(tester,ts,sequenceName):
+	PHmin = 6.5
+	PHmax = 9
+	PHStartSlowReagentDose = 5.5
+	PHreachpoint = 4.25
+	reagentDoseFastAmount = 0.50
+	reagentDoseSlowAmount = 0.05
+	testSucceeded=None
+	#tester.infoMessage('Start KH Tester') 
+	#tester.testStatus='Start KH Tester'
+	#mixing Reagent in Bottle
+	tester.infoMessage('Mix Reagent Bottle') 
+	tester.testStatus='Mix Reagent Bottle'
+	tester.mixerReagentBottleMotorCommand(ts.titrationAgitateSecs)
+	tester.infoMessage('Mix Jar') 
+	tester.testStatus='Mix Jar'
+	tester.mixerJarMotorCommand(2)
+	#empty Mixer Jar
+	tester.infoMessage('Empty jar back to tank') 
+	tester.testStatus='Empty jar back to tank'
+	tester.sampleWaterPumpCommand(-(ts.waterVolInML-5))
+	tester.infoMessage('Empty jar to drain') 
+	tester.testStatus='Empty jar to drain'
+	tester.drainPumpCommand(25)
+	#fill mixer Jar
+	tester.infoMessage('Fill jar with tank water') 
+	tester.testStatus='Fill jar with tank water'
+	tester.sampleWaterPumpCommand(ts.waterVolInML)
+	tester.mixerJarMotorCommand(5)
+	#check PH is ok
+	global PH
+	PH = tester.read_ph()
+	print('PH now in Jar: ' + str(PH))
+	#tester.infoMessage('PH in Jar ' + str(PH)) 
+	#tester.testStatus='PH in Jar ' + str(PH)
+	doseTotalReagent=0
+
+	if PH<PHmin or PH>PHmax:
+		print ('test failed because PH out of start range')
+		testSucceeded=False
+
+	tester.mixerJarMotorCommandManual(0.55)
+	tester.infoMessage('Dose first reagent amount') 
+	tester.testStatus='Dose first reagent amount'
+	tester.reagentPumpCommand(ts.titrationFirstSkip)
+	doseTotalReagent+=ts.titrationFirstSkip
+
+	while doseTotalReagent<=ts.titrationMaxAmount and testSucceeded==None:
+		tester.infoMessage('Dosed ' + str(doseTotalReagent) + 'ML') 
+		tester.testStatus='Dosed ' + str(doseTotalReagent) + 'ML'
+		if PH>PHStartSlowReagentDose:
+			#Mixer motor
+			tester.reagentPumpCommand(reagentDoseFastAmount)
+			doseTotalReagent+=reagentDoseFastAmount
+			PH = tester.read_ph()
+
+		if PH<=PHStartSlowReagentDose:
+			#Mixer motor
+			tester.reagentPumpCommand(reagentDoseSlowAmount)
+			doseTotalReagent+=reagentDoseSlowAmount
+			PH = tester.read_ph()
+			if PH <= PHreachpoint:
+				print ('Test passed with total reagent used' + str(doseTotalReagent))
+				testSucceeded=True
+				break
+
+		if doseTotalReagent>=ts.titrationMaxAmount:
+			testSucceeded=False
+
+	tester.mixerJarMotorCommandManual(0)
 	
+	if testSucceeded is True:
+		KHValue = round((doseTotalReagent*ts.calctovalue),2)
+		tester.infoMessage('Result was: '+ str(KHValue) + 'KH')
+		tester.testStatus='Result was: '+ str(KHValue) + 'KH'
+		sendMeasurementReport(tester,sequenceName,KHValue)
+	else:
+		KHValue = None
+		sendEvaluateAlarm(tester,sequenceName)
+
+	tester.infoMessage('Empty jar to drain') 
+	tester.testStatus='Empty jar to drain'
+	tester.drainPumpCommand(60)
+
+	#Fill Mixer Jar, for keeping the PH probe wet
+	tester.infoMessage('Fill jar with tank water') 
+	tester.testStatus='Fill jar with tank water'
+	tester.sampleWaterPumpCommand(ts.waterVolInML)
+	tester.mixerJarMotorCommand(5)
+
+	PH = tester.read_ph()
+	print('PH now after test in Jar: ' + str(PH))
+
+	return KHValue
+
+def CalibratePH(tester):
+	waitTime = 120
+	while waitTime >= 1: 
+		waitTime-=1
+		tester.infoMessage('Wait ' + str(waitTime) + ' Sec') 
+		tester.systemStatus='Wait ' + str(waitTime) + ' Sec'
+		time.sleep(1)
+	result=tester.calibratePH()
+	if result is True:
+		message = 'Passed'
+	else:
+		message = 'Failed'
+	tester.infoMessage('Calibration ' + str(message)) 
+	tester.systemStatus='Calibration ' + str(message)
+	global PH
+	PH = tester.read_ph()
+	print('PH now: ' + str(PH))
+	time.sleep(10)
+	tester.systemStatus="Idle"
+	return
+
+
 def runTestSequence(tester,sequenceName):
 	from tester.models import ReagentSetup
-	tester.homingArduinoStepper()
 	tester.systemStatus="Running Test"
 	tester.abortJob=False
 	results=None
@@ -1152,77 +1225,96 @@ def runTestSequence(tester,sequenceName):
 	testSucceeded=None
 	try:
 		ts=tester.testSequenceList[sequenceName]
-		numSteps=0
-		if not ts.reagent1Slot is None:
-			numSteps+=1
-			if (ReagentSetup.objects.get(slotName=ts.reagent1Slot).fluidRemainingInML)<tester.reagentRemainingMLAlarmThreshold:
-				tester.infoMessage('Reagent 1 to low to start test')
-				sendReagentAlarm(tester,ts.reagent1Slot,ReagentSetup.objects.get(slotName=ts.reagent1Slot).fluidRemainingInML)
-				testSucceeded=False
-		if not ts.reagent2Slot is None:
-			numSteps+=1
-			if (ReagentSetup.objects.get(slotName=ts.reagent2Slot).fluidRemainingInML)<tester.reagentRemainingMLAlarmThreshold:
-				tester.infoMessage('Reagent 2 to low to start test')
-				sendReagentAlarm(tester,ts.reagent2Slot,ReagentSetup.objects.get(slotName=ts.reagent2Slot).fluidRemainingInML)
-				testSucceeded=False
-		if not ts.reagent3Slot is None:
-			numSteps+=1
-			if (ReagentSetup.objects.get(slotName=ts.reagent3Slot).fluidRemainingInML)<tester.reagentRemainingMLAlarmThreshold:
-				sendReagentAlarm(tester,ts.reagent3Slot,ReagentSetup.objects.get(slotName=ts.reagent3Slot).fluidRemainingInML)
-				tester.infoMessage('Reagent 3 to low to start test')
-				testSucceeded=False
-		if not ts.titrationSlot is None:
-			numSteps+=1
-			if (ReagentSetup.objects.get(slotName=ts.titrationSlot).fluidRemainingInML)<tester.reagentRemainingMLAlarmThreshold:
-				sendReagentAlarm(tester,ts.titrationSlot,ReagentSetup.objects.get(slotName=ts.titrationSlot).fluidRemainingInML)
-				tester.infoMessage('Titration to low to start test')
-				testSucceeded=False
-
-		if not testSucceeded is False:
-			if not ts.reagent1Slot is None and ts.reagent1Amount>0:
-				success=runTestStep(tester,1,sequenceName,ts.waterVolInML,ts.reagent1Slot,ts.reagent1AgitateSecs,ts.reagent1AgitateMixerSecs,ts.reagent1AgitateSecsBetweenDrips,ts.reagent1Amount,ts.reagent1ThickLiquid,lastStep=numSteps==1)
-				testSucceeded=success
-				if success and not ts.reagent2Slot is None and ts.reagent2Amount>0 and not tester.abortJob:
-					success=runTestStep(tester,2,sequenceName,0,ts.reagent2Slot,ts.reagent2AgitateSecs,ts.reagent2AgitateMixerSecs,ts.reagent2AgitateSecsBetweenDrips,ts.reagent2Amount,ts.reagent2ThickLiquid,lastStep=numSteps==2)
-					testSucceeded=success
-					if success and not ts.reagent3Slot is None and ts.reagent3Amount>0  and not tester.abortJob:
-						success=runTestStep(tester,3,sequenceName,0,ts.reagent3Slot,ts.reagent3AgitateSecs,ts.reagent3AgitateMixerSecs,ts.reagent3AgitateSecsBetweenDrips,ts.reagent3Amount,ts.reagent3ThickLiquid,lastStep=numSteps==3)
-						testSucceeded=success
-			if testSucceeded and not tester.abortJob:
-				if ts.titrationSlot is None:
-					results=getDirectReadResults(tester,ts,sequenceName)
-					if results is None:
-						testSucceeded=False
-				else:
-					results=runTitration(tester,ts,sequenceName)
-					if results is None:
-						testSucceeded=False
-			else:
-				tester.saveTestSaveBadResults()
 		
-			if not tester.anyMoreJobs():
-				if testSucceeded:
-					tester.testStatus='Result was: %.2f' % results + ' - Cleaning the Mixer'
-					print('Result was: %.2f' % results + ' - Cleaning the Mixer')
-				else:
-					tester.testStatus='Test Failed'
-					print('Test Failed')
+		if ts.KHtestwithPHProbe:
+			if not ts.titrationSlot is None:
+				if (ReagentSetup.objects.get(slotName=ts.titrationSlot).fluidRemainingInML)<tester.reagentRemainingMLAlarmThresholdKHTester:
+					sendReagentAlarm(tester,ts.titrationSlot,ReagentSetup.objects.get(slotName=ts.titrationSlot).fluidRemainingInML)
+					tester.infoMessage('KH Reagent to low to start test')
+					testSucceeded=False
 
-			osmoseCleanMixerReactor(tester)
+				if not testSucceeded is False and not tester.abortJob:
+					results=runKHTest(tester,ts,sequenceName)
+					tester.saveTestResults(results,None)
+					if results is None:
+						testSucceeded=False
 
-			time.sleep(1)
-
-			tester.homingArduinoStepper()
-			tester.infoMessage('System Parked') 
-			
-		if testSucceeded:
-			tester.testStatus='Done: Last Results: %.2f' % results
 		else:
+
+			numSteps=0
+			tester.homingArduinoStepper()
+			if not ts.reagent1Slot is None:
+				numSteps+=1
+				if (ReagentSetup.objects.get(slotName=ts.reagent1Slot).fluidRemainingInML)<tester.reagentRemainingMLAlarmThresholdAutoTester:
+					tester.infoMessage('Reagent 1 to low to start test')
+					sendReagentAlarm(tester,ts.reagent1Slot,ReagentSetup.objects.get(slotName=ts.reagent1Slot).fluidRemainingInML)
+					testSucceeded=False
+			if not ts.reagent2Slot is None:
+				numSteps+=1
+				if (ReagentSetup.objects.get(slotName=ts.reagent2Slot).fluidRemainingInML)<tester.reagentRemainingMLAlarmThresholdAutoTester:
+					tester.infoMessage('Reagent 2 to low to start test')
+					sendReagentAlarm(tester,ts.reagent2Slot,ReagentSetup.objects.get(slotName=ts.reagent2Slot).fluidRemainingInML)
+					testSucceeded=False
+			if not ts.reagent3Slot is None:
+				numSteps+=1
+				if (ReagentSetup.objects.get(slotName=ts.reagent3Slot).fluidRemainingInML)<tester.reagentRemainingMLAlarmThresholdAutoTester:
+					sendReagentAlarm(tester,ts.reagent3Slot,ReagentSetup.objects.get(slotName=ts.reagent3Slot).fluidRemainingInML)
+					tester.infoMessage('Reagent 3 to low to start test')
+					testSucceeded=False
+			if not ts.titrationSlot is None:
+				numSteps+=1
+				if (ReagentSetup.objects.get(slotName=ts.titrationSlot).fluidRemainingInML)<tester.reagentRemainingMLAlarmThresholdAutoTester:
+					sendReagentAlarm(tester,ts.titrationSlot,ReagentSetup.objects.get(slotName=ts.titrationSlot).fluidRemainingInML)
+					tester.infoMessage('Titration to low to start test')
+					testSucceeded=False
+
+			if not testSucceeded is False:
+				if not ts.reagent1Slot is None and ts.reagent1Amount>0:
+					success=runTestStep(tester,1,sequenceName,ts.waterVolInML,ts.reagent1Slot,ts.reagent1AgitateSecs,ts.reagent1AgitateMixerSecs,ts.reagent1AgitateSecsBetweenDrips,ts.reagent1Amount,ts.reagent1ThickLiquid,lastStep=numSteps==1)
+					testSucceeded=success
+					if success and not ts.reagent2Slot is None and ts.reagent2Amount>0 and not tester.abortJob:
+						success=runTestStep(tester,2,sequenceName,0,ts.reagent2Slot,ts.reagent2AgitateSecs,ts.reagent2AgitateMixerSecs,ts.reagent2AgitateSecsBetweenDrips,ts.reagent2Amount,ts.reagent2ThickLiquid,lastStep=numSteps==2)
+						testSucceeded=success
+						if success and not ts.reagent3Slot is None and ts.reagent3Amount>0  and not tester.abortJob:
+							success=runTestStep(tester,3,sequenceName,0,ts.reagent3Slot,ts.reagent3AgitateSecs,ts.reagent3AgitateMixerSecs,ts.reagent3AgitateSecsBetweenDrips,ts.reagent3Amount,ts.reagent3ThickLiquid,lastStep=numSteps==3)
+							testSucceeded=success
+				if testSucceeded and not tester.abortJob:
+					if ts.titrationSlot is None:
+						results=getDirectReadResults(tester,ts,sequenceName)
+						if results is None:
+							testSucceeded=False
+					else:
+						results=runTitration(tester,ts,sequenceName)
+						if results is None:
+							testSucceeded=False
+				else:
+					tester.saveTestSaveBadResults()
+		
+				if not tester.anyMoreJobs():
+					if testSucceeded:
+						tester.testStatus='Result was: %.2f' % results + ' - Cleaning the Mixer'
+						print('Result was: %.2f' % results + ' - Cleaning the Mixer')
+					else:
+						tester.testStatus='Test Failed'
+						print('Test Failed')
+
+				osmoseCleanMixerReactor(tester)
+
+				time.sleep(1)
+
+				tester.homingArduinoStepper()
+				tester.infoMessage('System Parked') 
+		if testSucceeded is False or None:
 			tester.testStatus='Test Failed'
+		else:
+			tester.testStatus='Done: Last Results: %.2f' % results
 		tester.colorTable=None
 	except:
 		tester.debugLog.exception('Failure when running Test')
+	tester.turnAgitatorOff()
 	tester.systemStatus="Idle"
+	global rgb
+	rgb=255,255,255
 	return testSucceeded
 
 def dailyMaintenance():
@@ -1374,7 +1466,6 @@ def testerDiagnostics():
 		else:
 			tester.diagnosticLock.release()
 		time.sleep(10)
-				  
 				 
 def exit_handler():
 	global remoteControlThreadRPYC
