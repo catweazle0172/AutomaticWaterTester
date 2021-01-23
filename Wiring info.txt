@@ -1,0 +1,18 @@
+PC9685 boards (I2C bus)
+PCA60 1 (address: 0x60) (No Jumpers): 
+Channel1 : KH Drain pump
+Channel2 : 
+Channel3 : Mixer KH Jar
+Channel4 : Mixer KH Reagent Motor
+
+PCA61 2 (address: 0x61) (Jumper on A0): 
+Channel1 : Autotester Mixer (Agitate)
+Channel2 : Main Drain Pump
+Channel3 : Clean Osmose Pump
+Channel4 : Clean Drain Pump
+
+PCA62 3 (address: 0x62) (Jumper on A1): 
+Channel1 : 
+Channel2 : 
+Channel3 : Valve Tank Water
+Channel4 : Valve Osmose Water
