@@ -46,7 +46,7 @@ Mixerreactor='Mixerreactor'
 Cleanreactor='Cleanreactor'
 osmosewater='osmosewater'
 tankwater='tankwater'
-CentimeterToMove={'A':0,'B':3.7,'C':7.8,'D':11.4,'E':15.4,'F':19,'G':22.5,'H':26.2,'I':30,'J':33.8,'K':37.3,'L':40.8,'M':44.8,'Cleanreactor':48.4,'Mixerreactor':51.6}
+CentimeterToMove={'A':0,'B':3.7,'C':7.3,'D':11,'E':14.9,'F':18.6,'G':22.1,'H':25.7,'I':29.7,'J':33.3,'K':36.9,'L':40.5,'M':44.5,'Cleanreactor':47.9,'Mixerreactor':51.1}
 destinationLetters='ABCDEFGHIJKLM'
 airInSyringe=0.00 #was 0.07
 syringeTolorance=0.03
@@ -1101,11 +1101,13 @@ def runTitration(tester,ts,sequenceName):
 def runKHTest(tester,ts,sequenceName):
 	PHmin = 6.5
 	PHmax = 9
-	PHStartSlowReagentDose = 5.5
-	PHreachpoint = 4.25
+	PHStartSlowReagentDose = 5.8
+	PHreachpoint = 4.5
 	reagentDoseFastAmount = 0.50
 	reagentDoseSlowAmount = 0.05
 	testSucceeded=None
+
+
 	#tester.infoMessage('Start KH Tester') 
 	#tester.testStatus='Start KH Tester'
 	#mixing Reagent in Bottle
@@ -1178,6 +1180,8 @@ def runKHTest(tester,ts,sequenceName):
 		KHValue = None
 		sendEvaluateAlarm(tester,sequenceName)
 
+
+
 	tester.infoMessage('Empty jar to drain') 
 	tester.testStatus='Empty jar to drain'
 	tester.drainPumpCommand(60)
@@ -1190,6 +1194,11 @@ def runKHTest(tester,ts,sequenceName):
 
 	PH = tester.read_ph()
 	print('PH now after test in Jar: ' + str(PH))
+
+	tester.saveNewReagentValue(ts.titrationSlot,doseTotalReagent)
+
+	if tester.lastReagentRemainingML<tester.reagentRemainingMLAlarmThresholdKHTester and tester.reagentAlmostEmptyAlarmEnable:
+		sendReagentAlarm(tester,ts.titrationSlot,tester.lastReagentRemainingML)
 
 	return KHValue
 

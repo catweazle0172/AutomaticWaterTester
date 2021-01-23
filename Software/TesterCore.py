@@ -707,11 +707,11 @@ class Tester:
 
 	def turnAgitator(self,sec):
 		if sec==0:
-			pca61.motor1.throttle = 0.25
+			pca61.motor1.throttle = 0.23
 			self.agitatorOn=True
 			return
 		else: 	
-			pca61.motor1.throttle = 0.25
+			pca61.motor1.throttle = 0.23
 			self.agitatorOn=True
 			time.sleep(sec)
 			pca61.motor1.throttle = 0
@@ -1226,9 +1226,9 @@ class Tester:
 		pca60.motor3.throttle = speed
 
 	def mixerReagentBottleMotorCommand(self,sec):
-		pca60.motor4.throttle = 1.0
+		pca60.motor4.throttle = 0.5
 		time.sleep(sec)
-		pca61.motor4.throttle = 0
+		pca60.motor4.throttle = 0
 
 	def read_ph(self):
 		temperature=25
