@@ -1,0 +1,65 @@
+{% extends 'tester/base.html' %}
+
+{% block content %}
+<img src='http://{{streamingURL}}/tester.mjpg'  title="Live feed from inside the autotester">
+<form action="/tester/calibrate/" method="post" id="queueTest">
+{% csrf_token %}
+<table>
+<tr>
+<td>Calibrate Dosing Pumps and expect the following dosed amount: (Fill in the dosed amount an press UPDATE to store the new settings)</td>
+</tr>
+<tr>
+<td>***Start the KH Sample Pump calibration with an empty hose!!!***</td>
+</tr>
+</table>
+<table border="1" class="controlTable">
+<tr>
+<td>AutoTester</td>
+<td>KH Sample</td>
+<td>KH Reagent</td>
+</tr><tr>
+<tr>
+<td>+- 5ML</td>
+<td>+- 50ML</td>
+<td>+- 15ML</td>
+</tr>
+<div>
+<tr>
+<td><input type='submit' class="genericButton" title="Start dosing liquid for calibration" name='actionButton' value='DoseAutoTester'></td>
+<td><input type='submit' class="genericButton" title="Start dosing liquid for calibration" name='actionButton' value='DoseKHSample'></td>
+<td><input type='submit' class="genericButton" title='Start dosing liquid for calibration' name='actionButton' value='DoseKHReagent'></td>
+</div>
+</tr>
+
+</table>
+<br>
+<table border="1" class="controlTable">
+<div>
+{{testerCalForm}}
+<td><input type='submit' class="genericButton" title='Save calibration' name='actionButton' value='UPDATE'></td>
+<td></td>
+</table>
+<br>
+<table>
+<tr>
+<td>To calibrate the PH probe, put the probe in the calibration sollution and push on the button.</td>
+</tr>
+</table>
+<table border="1" class="controlTable">
+<tr>
+<td>Calibrate PH Probe</td>
+<td></td>
+</tr><tr>
+<tr>
+<td>PH 4</td>
+<td>PH 7</td>
+</tr>
+<div>
+<tr>
+<td><input type='submit' class="genericButton" title="Start dosing liquid for calibration" name='actionButton' value='CalPH4'></td>
+<td><input type='submit' class="genericButton" title="Start dosing liquid for calibration" name='actionButton' value='CalPH7'></td>
+</div>
+</table>
+</form>
+{% endblock %}
+	

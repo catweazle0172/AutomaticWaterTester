@@ -680,7 +680,7 @@ class Tester:
 		return
 
 	def osmoseCleanPump(self,sec):
-		pca61.motor3.throttle = -1
+		pca61.motor3.throttle = 1
 		self.cleanPumpOn=True
 		time.sleep(sec)
 		pca61.motor3.throttle = 0
@@ -707,12 +707,16 @@ class Tester:
 
 	def turnAgitator(self,sec):
 		if sec==0:
-			pca61.motor1.throttle = 0.23
+			pca61.motor1.throttle = 0.3
+			time.sleep(0.1)
+			pca61.motor1.throttle = 0.2
 			self.agitatorOn=True
 			return
 		else: 	
-			pca61.motor1.throttle = 0.23
+			pca61.motor1.throttle = 0.3
 			self.agitatorOn=True
+			time.sleep(0.1)
+			pca61.motor1.throttle = 0.2
 			time.sleep(sec)
 			pca61.motor1.throttle = 0
 			self.agitatorOn=False
@@ -724,6 +728,7 @@ class Tester:
 		return
 
 	def calibrateAutoTesterPump(self):
+		RampUpTimeDelay = 0.005
 		pca62.motor3.throttle = 0		#Open valve Tank Water
 		pca62.motor4.throttle = 1		#Close valve Osmose Water
 		if not self.mainPumpEnabled:
@@ -744,6 +749,10 @@ class Tester:
 			time.sleep(stepDelay)
 			stepCountThisPump+=1
 
+			if RampUpTimeDelay > 0.0001:
+				RampUpTimeDelay-=0.0001
+				time.sleep(RampUpTimeDelay)
+
 		self.mainPumpEnabled=False     
 		GPIO.output(mainPumpEnableGPIO,GPIO.HIGH)
 		pca62.motor3.throttle = 1		#Close valve Tank Water
@@ -751,15 +760,16 @@ class Tester:
 		return True  
 
 	def calibrateKHSamplePump(self):
+		RampUpTimeDelay = 0.01
 		if not self.KHSamplePumpEnabled:
 			GPIO.output(KHSamplePumpEnableGPIO,GPIO.LOW)
 			time.sleep(.0005)
 			self.KHSamplePumpEnabled=True
 
-		GPIO.output(KHSamplePumpDirectionGPIO,GPIO.HIGH)
+		GPIO.output(KHSamplePumpDirectionGPIO,GPIO.LOW)
 		stepCountThisPump=0
 		stepDelay=.00001
-		stepsToPump=582000
+		stepsToPump=940000
 		print (stepsToPump)
 
 		while stepCountThisPump<stepsToPump:
@@ -769,17 +779,22 @@ class Tester:
 			time.sleep(stepDelay)
 			stepCountThisPump+=1
 
+			if RampUpTimeDelay > 0.0001:
+				RampUpTimeDelay-=0.0001
+				time.sleep(RampUpTimeDelay)
+
 		self.KHSamplePumpEnabled=False     
 		GPIO.output(KHSamplePumpEnableGPIO,GPIO.HIGH)
 		return True
 
 	def calibrateKHReagentPump(self):
+		RampUpTimeDelay = 0.01
 		if not self.KHReagentPumpEnabled:
 			GPIO.output(KHReagentPumpEnableGPIO,GPIO.LOW)
 			time.sleep(.0005)
 			self.KHReagentPumpEnabled=True
 
-		GPIO.output(KHReagentPumpDirectionGPIO,GPIO.HIGH)
+		GPIO.output(KHReagentPumpDirectionGPIO,GPIO.LOW)
 		stepCountThisPump=0
 		stepDelay=.00001
 		stepsToPump=260000
@@ -791,6 +806,10 @@ class Tester:
 			GPIO.output(KHReagentPumpStepGPIO,GPIO.LOW)
 			time.sleep(stepDelay)
 			stepCountThisPump+=1
+
+			if RampUpTimeDelay > 0.0001:
+				RampUpTimeDelay-=0.0001
+				time.sleep(RampUpTimeDelay)
 
 		self.KHReagentPumpEnabled=False     
 		GPIO.output(KHReagentPumpEnableGPIO,GPIO.HIGH)
@@ -848,14 +867,14 @@ class Tester:
 			time.sleep(.0005)
 			self.KHSamplePumpEnabled=True
 		if ml>0:
-			GPIO.output(KHSamplePumpDirectionGPIO,GPIO.HIGH)
-		else:
 			GPIO.output(KHSamplePumpDirectionGPIO,GPIO.LOW)
+		else:
+			GPIO.output(KHSamplePumpDirectionGPIO,GPIO.HIGH)
 			ml*=-1
 
 		stepCountThisPump=0
 		stepDelay=.00001
-		stepsfor1ml=int(582000 / self.calibrationMLKHSample)
+		stepsfor1ml=int(940000 / self.calibrationMLKHSample)
 		stepsToPump=ml*stepsfor1ml
 		print (stepsToPump)	
 
@@ -881,7 +900,7 @@ class Tester:
 			time.sleep(.0005)
 			self.KHReagentPumpEnabled=True
 		if ml>0:
-			GPIO.output(KHReagentPumpDirectionGPIO,GPIO.HIGH)
+			GPIO.output(KHReagentPumpDirectionGPIO,GPIO.LOW)
 
 		stepCountThisPump=0
 		stepDelay=.00002

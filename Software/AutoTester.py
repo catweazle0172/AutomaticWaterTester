@@ -1120,7 +1120,7 @@ def runKHTest(tester,ts,sequenceName):
 	#empty Mixer Jar
 	tester.infoMessage('Empty jar back to tank') 
 	tester.testStatus='Empty jar back to tank'
-	tester.sampleWaterPumpCommand(-(ts.waterVolInML-5))
+	tester.sampleWaterPumpCommand(-ts.waterVolInML)
 	tester.infoMessage('Empty jar to drain') 
 	tester.testStatus='Empty jar to drain'
 	tester.drainPumpCommand(25)
