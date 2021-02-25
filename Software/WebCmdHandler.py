@@ -25,7 +25,6 @@ def resetDisplayFlags(tester):
     tester.testStatus=None
     tester.colorTable=None
     
-    
 def shiftSwatches(tester,colorSheetName,lightingConditions,colShift,rowShift):
     swatchList=tester.colorSheetList[colorSheetName].swatchList
     for swatchNameAndCondition in swatchList:
@@ -60,7 +59,6 @@ def updateSwatch(tester,image,swatchRow,colorSheetName,newValue):
         except:                  
             tester.debugLog.exception("Invalid value for Value: " + str(swatchRow))
             return None
-    
     
 def saveSwatch(tester,swatchRow,newValue):
     cs=tester.currentColorSheet
@@ -121,50 +119,32 @@ def parseHome(tester,cmdOperation,cmdObject,cmdValue):
 
 def parseControl(tester,cmdOperation,cmdObject,cmdValue):
     try:
-        if cmdOperation=='LEDOn':
-            tester.turnLedOn()
-        elif cmdOperation=='LEDOff':     
-            tester.turnLedOff()
-        elif cmdOperation=='PlungerUp':
-            tester.featureStepSize=float(cmdObject)
-            raisePlunger(tester)
-        elif cmdOperation=='PlungerDn':
-            tester.featureStepSize=float(cmdObject)
-            lowerPlunger(tester)
-        elif cmdOperation=='MotorsOff':
-            tester.plungerDisable()
-            tester.carouselDisable()
-            agitatorStop(tester)
-            tester.turnPumpOff()
-            tester.openMixerValve()
-        elif cmdOperation=='OpenStoppers':
-            setPlungerToOpen(tester)
-        elif cmdOperation=='CloseStoppers':
-            setPlungerToClosed(tester)
-        elif cmdOperation=='Center':
-            centerReagent(tester,precise=True)
-        elif cmdOperation=='CarouselCW':
-            tester.featureStepSize=float(cmdObject)
-            rotateCarouselClockwise(tester)
-        elif cmdOperation=='CarouselCCW':
-            tester.featureStepSize=float(cmdObject)
-            rotateCarouselCounterClockwise(tester)
+        if cmdOperation=='CalibrateMeasurement':
+            tester.calibrateArduinoSensor()
+        elif cmdOperation=='Measure':     
+            tester.measureArduinoSensor()
         elif cmdOperation=='AgitatorOn':
-            tester.turnAgitatorOn()
+            tester.turnAgitator(0)
         elif cmdOperation=='AgitatorOff':
-           tester.turnAgitatorOff()
-        elif cmdOperation=='PumpOn':
-            tester.turnPumpOn()
-        elif cmdOperation=='PumpOff':
-            tester.turnPumpOff()
-        elif cmdOperation=='ValveOpn':
-            tester.openMixerValve()
-        elif cmdOperation=='ValveCls':
-            tester.closeMixerValve()
-        elif cmdOperation=='Clean':
-            osmoseCleanMixerReactor(tester)                     
-        elif cmdOperation=='Fill5ML':
-            tester.MixerReactorPump(5)  
+            tester.turnAgitatorOff()
+        elif cmdOperation=='CleanTankwater':
+            cleanMixerReactor(tester)    
+        elif cmdOperation=='CleanOsmoseWater':
+            osmoseCleanMixerReactor(tester)               
+        elif cmdOperation=='Fill5MLTankWater':
+            tester.MixerReactorPump(5,tankwater)
+        elif cmdOperation=='Fill5MLOsmoseWater':
+            tester.MixerReactorPump(5,osmosewater)
+        elif cmdOperation=='HomeSyringe':
+            tester.homingArduinoStepper()
+        elif cmdOperation=='UpSyringe':
+            tester.UpperSyringes()
+        elif cmdOperation=='MainDrainPump':
+            tester.mainDrainPump(8)
+        elif cmdOperation=='OsmoseCleanPump':
+            tester.osmoseCleanPump(6)
+        elif cmdOperation=='OsmoseCleanPump':
+            tester.cleanDrainPump(8)  
 
         else:
             print('Unknown CONTROL operation: ' + cmdOperation) 
@@ -256,59 +236,10 @@ def parseSwatch(tester,cmdOperation,cmdObject,cmdValue):
     except:
         tester.debugLog.exception("Error in SWATCH parsing")
 
-def parseOperate(tester,cmdOperation,cmdObject,cmdValue):
-    try:
-        if cmdOperation=='ph':
-            queueTestJob(tester,'phTest-API')                    
-        elif cmdOperation=='phHigh':
-            queueTestJob(tester,'phHighTest-API') 
-        elif cmdOperation=='Ammonia':
-            queueTestJob(tester,'Ammonia-API') 
-        elif cmdOperation=='Nitrite':
-            queueTestJob(tester,'Nitrite-API') 
-        elif cmdOperation=='Nitrate':
-            queueTestJob(tester,'Nitrate-API') 
-        elif cmdOperation=='evaluate':
-            evaluateResults(tester,'ph-API')
-        elif cmdOperation=='LEDOn':
-            tester.turnLedOn()
-        elif cmdOperation=='LEDOff':     
-            tester.turnLedOff()
-        elif cmdOperation=='Snapshot':
-            takeSnapshot(tester)
-        elif cmdOperation=='PlungerUp':
-            raisePlunger(tester)
-        elif cmdOperation=='PlungerDn':
-            lowerPlunger(tester)
-        elif cmdOperation=='PlungerOff':
-            tester.disablePlunger()
-        elif cmdOperation=='CarouselCW':
-            rotateCarouselClockwise(tester)
-        elif cmdOperation=='CarouselCCW':
-            rotateCarouselCounterClockwise(tester)
-        elif cmdOperation=='CarouselOff':
-            tester.disableCarousel()
-        elif cmdOperation=='AgitatorOn':
-            agitatorStart(tester)
-        elif cmdOperation=='AgitatorOff':
-            agitatorStop(tester)
-        elif cmdOperation=='PumpOn':
-            tester.turnPumpOn()
-        elif cmdOperation=='PumpOff':
-            tester.turnPumpOff()
-        elif cmdOperation=='ValveOpn':
-            tester.openMixerValve()
-        elif cmdOperation=='ValveCls':
-            tester.closeMixerValve()
-        else:
-            print('Unknown OPERATE operation: ' + cmdOperation)                               
-    except:
-        tester.debugLog.exception("Error in OPERATE parsing")
-
 def parseAlarms(tester,cmdOperation,cmdObject,cmdValue):
     try:
-        if cmdOperation=='testIFTTT':
-            sendTestMeasurementReport(tester,'IFTTT Test',cmdObject)                    
+        if cmdOperation=='testTelegram':
+            sendTestMeasurementReport(tester,'Telegram Test',cmdObject)                    
         else:
             print('Unknown ALARMS operation: ' + cmdOperation)                               
     except:
@@ -373,7 +304,6 @@ def processWebCommand(tester,commandString):
         pass
     else:
         tester.debugLog.info('Unknown category in web command string: ' + commandString)        
-
 
 if __name__ == '__main__':
     pass

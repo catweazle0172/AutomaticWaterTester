@@ -29,10 +29,10 @@ import traceback
 from django.http import HttpResponse,Http404,HttpResponseRedirect
 from .models import TestDefinition,TestResultsExternal,JobExternal,TestResultsExternal, \
     TesterFeatureExternal,SwatchExternal,ColorSheetExternal,TesterExternal,JobEntry,TestSchedule, \
-    ReagentSetup,TesterExternal
+    ReagentSetup,TesterExternal,CalibrationValues,MeasuredParameters
     
 #from .forms import ScheduleFormSet
-from .forms import ScheduleForm,TestDefinitionForm, ReagentForm, TesterForm
+from .forms import ScheduleForm,TestDefinitionForm,ReagentForm,TesterForm,CalibrationForm,MeasuredParametersForm
    
 def sendCmdToTester(cmd):
     try:
@@ -66,52 +66,68 @@ def navigate(request):
     except:
         pass
     
-   
 @login_required
 def home(request,formResult):
+    pageName='Home'
+    formToProcess=None
     if request.method=='GET':
         jumpLoc=navigate(request) 
         if not jumpLoc is None:
-            return redirect(jumpLoc)    
+            return redirect(jumpLoc)     
+
     streamingURL,imageWidth,imageHeight=getDisplayInfo(request)
-    pageName='Home'
-    formToProcess=None
-    try:
-        testSequenceNameToRun=request.POST['testName']
-        formToProcess = 'queueJob'
-    except:
+    print (streamingURL)
+    print (imageWidth)
+    print (imageHeight)
+    print (request)
+
+    if request.method=='POST':
+        try:
+            testSequenceNameToRun=request.POST['testName']
+            formToProcess = 'queueJob'
+        except:
+            pass
         try:
             updateQueueAction=request.POST['jobAction']
             formToProcess = 'updateQueue'
         except:
             pass
 
-    if formToProcess == 'queueJob':
-        try:
-            te=TesterExternal.objects.get(pk=1)
-            newJob=JobExternal()
-            newJob.jobToRun=TestDefinition.objects.get(testName=testSequenceNameToRun)
-            newJob.save()
-#                return HttpResponseRedirect('run')
-        except: 
-            traceback.print_exc()
-            print('Key error:' + testSequenceNameToRun)
-    if formToProcess == 'updateQueue':
-        print(updateQueueAction)
-        updateIndex=updateQueueAction.split('-')
-        updateID=int(updateIndex[1])
-        if updateIndex[0]=='REMOVE':
-            try:
-                JobExternal.objects.get(pk=updateID).delete()
-            except:
-                pass
-        elif updateIndex[0]=='DELETE':
-            TestResultsExternal.objects.get(pk=updateID).delete()
-        elif updateIndex[0]=='CANCEL':
-            sendCmdToTester('HOME/Abort')
-        else:
-            print('Error, unknown action')
-#            return HttpResponse("")
+        if formToProcess == 'queueJob':
+            if testSequenceNameToRun == 'all':
+                testList=TestDefinition.objects.all()
+                for tests in testList:
+                    te=TesterExternal.objects.get(pk=1)
+                    newJob=JobExternal()
+                    newJob.jobToRun=tests
+                    newJob.save()
+            else: 
+                try:
+                    te=TesterExternal.objects.get(pk=1)
+                    newJob=JobExternal()
+                    newJob.jobToRun=TestDefinition.objects.get(testName=testSequenceNameToRun)
+                    newJob.save()
+                    #return HttpResponseRedirect('run')
+                except: 
+                    traceback.print_exc()
+                    print('Key error:' + testSequenceNameToRun)
+        if formToProcess == 'updateQueue':
+            print(updateQueueAction)
+            updateIndex=updateQueueAction.split('-')
+            updateID=int(updateIndex[1])
+            if updateIndex[0]=='REMOVE':
+                try:
+                    JobExternal.objects.get(pk=updateID).delete()
+                except:
+                    pass
+            elif updateIndex[0]=='DELETE':
+                TestResultsExternal.objects.get(pk=updateID).delete()
+            elif updateIndex[0]=='CANCEL':
+                sendCmdToTester('HOME/Abort')
+            else:
+                print('Error, unknown action')
+                #return HttpResponse("")
+
     testList=TestDefinition.objects.all()
     jobQueue=JobExternal.objects.all()
     jobList=[]
@@ -147,7 +163,7 @@ def home(request,formResult):
         newJob.jobIndex=result.pk
         jobList.append(newJob)
         currentResult+=1
-    context={'pageName':pageName,'streamingURL':streamingURL, 'testList':testList,'jobList':jobList}
+    context={'pageName':pageName,'streamingURL':streamingURL,'testList':testList,'jobList':jobList}
     return render(request,'tester/home.html',context)
 
 
@@ -185,22 +201,54 @@ def control(request,formResult):
     if request.method=='POST':
         try:
             cmd=request.POST['button']
-            lastStepSize=request.POST['stepSize']
-            sendCmdToTester('CONTROL/' + cmd + '/' + lastStepSize)
+            sendCmdToTester('CONTROL/' + cmd + '/')
+
         except:
             pass
         try:
             cmd=request.POST['diag-button']
-            lastStepSize=request.POST['stepSize']
-            sendCmdToTester('DIAGNOSTIC/' + cmd + '/' + lastStepSize)
+            sendCmdToTester('DIAGNOSTIC/' + cmd + '/')
         except:
             pass
-    else:
-        lastStepSize='1'
-    stepSizeList=['1','5','10','30','90']
-    context={'pageName':pageName,'streamingURL':streamingURL,'lastStepSize':lastStepSize,'stepSizeList':stepSizeList}
+
+    MeasureInfo=MeasuredParameters.objects.get(pk=1)
+    MeasuredParametersData=MeasuredParametersForm(instance=MeasureInfo)
+    context={'pageName':pageName,'streamingURL':streamingURL,'MeasuredParametersData':MeasuredParametersData}
     return render(request,'tester/control.html',context)
 
+@login_required
+def calibrate(request,formResult):
+    pageName='Calibration'
+    if request.method=='GET':
+        jumpLoc=navigate(request) 
+        if not jumpLoc is None:
+            return redirect(jumpLoc)    
+    streamingURL,imageWidth,imageHeight=getDisplayInfo(request)
+    
+
+    if request.method=='POST':
+        adminAction=request.POST["actionButton"]
+        try:
+            cmd=request.POST['actionButton']
+            sendCmdToTester('CALIBRATE/' + cmd + '/')
+            calInfo=CalibrationValues.objects.get(pk=1)
+            testerCalForm=CalibrationForm(request.POST,instance=calInfo)
+        except:
+            pass
+
+        if adminAction=='UPDATE':
+            calInfo=CalibrationValues.objects.get(pk=1)
+            testerCalForm=CalibrationForm(request.POST,instance=calInfo)
+            try:
+                testerCalForm.save()
+                messages.success(request,'Changes saved. Will take affect after program restarted')
+            except:
+                traceback.print_exc()
+    else:           
+        calInfo=CalibrationValues.objects.get(pk=1)
+        testerCalForm=CalibrationForm(instance=calInfo)
+    context={'pageName':pageName,'streamingURL':streamingURL,'testerCalForm':testerCalForm}
+    return render(request,'tester/calibrate.html',context)
 
 def generateFeatureOptionsX(featureBeingUsed):
     if featureBeingUsed is None:
@@ -612,6 +660,3 @@ def admin(request,formResult):
         testerAdminForm=TesterForm(instance=adminInfo)
     context={'pageName':pageName,'testerAdminForm':testerAdminForm}
     return render(request,'tester/admin.html',context)
-    
-
-

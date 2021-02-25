@@ -37,6 +37,7 @@ import random
 from random import randint
 import django
 import platform
+from scipy.interpolate import interp1d
 
 currentVersion='0.02'
 remoteControlThreadRPYC=None
@@ -50,7 +51,7 @@ CentimeterToMove={'A':0,'B':3.7,'C':7.3,'D':11,'E':14.9,'F':18.6,'G':22.1,'H':25
 destinationLetters='ABCDEFGHIJKLM'
 airInSyringe=0.00 #was 0.07
 syringeTolorance=0.03
-rgb=255,255,255
+BGR=255,255,255
 PH='-'
 
 def screenPresent(name):
@@ -193,7 +194,7 @@ class TesterViewer(BaseHTTPRequestHandler):
 						cv2.putText(imageCopy,'System Status: ' + tester.systemStatus,(10,25), font, .75,(255,255,255),2,cv2.LINE_AA)
 						cv2.putText(imageCopy,'Last PH: ' + str(PH),(10,630), font, .75,(255,255,255),2,cv2.LINE_AA)
 						x,y,w,h = 350,630,175,75
-						cv2.rectangle(imageCopy, (x, 560), (x + w, y + h), (rgb), -1)
+						cv2.rectangle(imageCopy, (x, 560), (x + w, y + h), (BGR), -1)
 						if not tester.testStatus is None:
 							try:
 								cv2.putText(imageCopy,"Running Test: " + tester.currentTest,(20,55), font, .75,(255,255,255),2,cv2.LINE_AA)
@@ -278,7 +279,7 @@ def saveTopDripList(tester):
 def testFillingMixer(tester):
 	randomLevel=random.randint(4,7)
 	tester.debugLog.info('Test filling mixer to level: ' + str(randomLevel))
-	result=tester.MixerReactorPump(randomLevel)
+	result=tester.MixerReactorPump(randomLevel,tankwater)
 	return result
 
 def testMixerFill(tester,numCycles):
@@ -290,6 +291,7 @@ def testMixerFill(tester,numCycles):
 		if result:
 			tester.debugLog.info('Cycle completion: Success')
 			successCount+=1
+			tester.mainDrainPump(8)
 		else:
 			tester.debugLog.info('Cycle completion: Failed')
 			failureCount+=1
@@ -449,12 +451,8 @@ def osmoseCleanMixerReactor(tester):
 	except:
 		tester.debugLog.exception("Failure cleaning with Osmose Mixer")
 
-def evaluateResults(tester,colorChartToUse):
-	tester.videoLowResCaptureLock.acquire()
-	tester.videoLowResCaptureLock.wait()
-	imageCopy=tester.latestLowResImage.copy()
-	tester.videoLowResCaptureLock.release()
-	rs=evaluateColor(tester,imageCopy,colorChartToUse)
+def evaluateResults(tester,colorChartToUse,results):
+	rs=evaluateColor(tester,colorChartToUse,results)
 	if rs.valueAtSwatch<0:
 		rs.valueAtSwatch=0
 	tester.infoMessage('Result was: ' + str(rs.valueAtSwatch)) 
@@ -465,8 +463,8 @@ def evaluateResultsBinary(tester,colorChartToUse):
 	tester.videoLowResCaptureLock.wait()
 	imageCopy=tester.latestLowResImage.copy()
 	tester.videoLowResCaptureLock.release()
-	global rgb
-	l,a,b,rgb=tester.measureArduinoSensor()
+	global BGR
+	l,a,b,bgr,Rvalue,Gvalue,Bvalue=tester.measureArduinoSensor()
 	rs=evaluateColorBinary(tester,imageCopy,colorChartToUse,l,a,b)
 	if rs.valueAtSwatch<0:
 		rs.valueAtSwatch=0
@@ -644,7 +642,7 @@ def runTestStep(tester,testStepNumber,testName,waterVolInML,reagentSlot,agitateR
 		tester.debugLog.exception('Failure when running Test Step ' + str(testStepNumber))
 		return False
 	
-def getDirectReadResults(tester,ts,sequenceName):
+def getDirectReadResultsRGBColor(tester,ts,sequenceName):
 	testSucceeded=True
 	results=None
 	tester.colorTable=tester.colorSheetList[ts.colorChartToUse].generateColorTableDisplay(tester)        
@@ -654,8 +652,8 @@ def getDirectReadResults(tester,ts,sequenceName):
 		success=tester.XtoTargetReagent(TargetXas)
 		tester.testStatus='Agitating the Mixture for ' + str(ts.agitateMixtureSecs) + ' secs.'
 		tester.turnAgitator(ts.agitateMixtureSecs)
-	global rgb
-	l,a,b,rgb=tester.measureArduinoSensor()
+	global bgr
+	l,a,b,BGR,Rvalue,Gvalue,Bvalue=tester.measureArduinoSensor()
 
 	timeRemaining=ts.delayBeforeReadingSecs-ts.agitateMixtureSecs
 	while timeRemaining>0:
@@ -663,7 +661,7 @@ def getDirectReadResults(tester,ts,sequenceName):
 		time.sleep(1)
 		timeRemaining-=1
 	try:
-		rs=evaluateResults(tester,ts.colorChartToUse)
+		rs=evaluateResults(tester,ts.colorChartToUse,results)
 		results=rs.valueAtSwatch
 		tester.testStatus='Test results are: %.2f' % results
 		tester.saveTestResults(results,swatchResultList=[rs])
@@ -677,7 +675,67 @@ def getDirectReadResults(tester,ts,sequenceName):
 		tester.debugLog.exception("Failure evaluating")
 	checkTestRange(tester,ts,results)
 	
-	l,a,b,rgb=tester.measureArduinoSensor()
+	l,a,b,BGR,Rvalue,Gvalue,Bvalue=tester.measureArduinoSensor()
+
+	time.sleep(tester.pauseInSecsBeforeEmptyingMixingChamber)
+
+	if testSucceeded:
+		tester.testStatus='Result was: %.2f' % results + ' - Emptying chamber'
+	else:
+		tester.testStatus='Test Failed'
+	tester.mainDrainPump(6)
+	return results
+
+def getDirectReadResultsWithArbsorption(tester,ts,sequenceName):
+	testSucceeded=True
+	results=None
+	global BGR
+
+	if ts.agitateMixtureSecs>0:
+		success=tester.UpperSyringes()
+		TargetXas=CentimeterToMove[Mixerreactor]
+		success=tester.XtoTargetReagent(TargetXas)
+		tester.testStatus='Agitating the Mixture for ' + str(ts.agitateMixtureSecs) + ' secs.'
+		tester.turnAgitator(ts.agitateMixtureSecs)
+
+	l,a,b,BGR,Rvalue,Gvalue,Bvalue=tester.measureArduinoSensor()
+
+	timeRemaining=ts.delayBeforeReadingSecs-ts.agitateMixtureSecs
+	while timeRemaining>0:
+		tester.testStatus='Waiting ' + str(timeRemaining) + ' secs before reading mixture.'
+		time.sleep(1)
+		timeRemaining-=1
+	try:
+		xg = np.fromstring(ts.lightAbsorptionValue, dtype=float, sep=',')
+		yg = np.fromstring(ts.lightAbsorptionResult, dtype=float, sep=',')
+
+		l,a,b,BGR,Rvalue,Gvalue,Bvalue=tester.measureArduinoSensor()
+		
+		if "Red" in ts.lightAbsorptionColor:
+			xw = Rvalue
+		if "Green" in ts.lightAbsorptionColor:
+			xw = Gvalue
+		if "Blue" in ts.lightAbsorptionColor:
+			xw = Bvalue
+
+		fi = interp1d(xg,yg)
+		results = round(float(fi(xw)),2)
+		print (results)
+
+		rs=evaluateResults(tester,ts.colorChartToUse,results)
+		tester.testStatus='Test results are: %.2f' % results
+		tester.saveTestResults(results,swatchResultList=[rs])
+		tester.infoMessage('Completed Test ' + sequenceName + ', Results were: %.2f' % results)
+		if tester.sendMeasurementReports and not tester.telegramBotToken is None:
+			
+			sendMeasurementReport(tester,sequenceName,results)
+	except:
+		testSucceeded=False
+		sendEvaluateAlarm(tester,sequenceName)
+		tester.debugLog.exception("Failure evaluating")
+	checkTestRange(tester,ts,results)
+	
+	l,a,b,BGR,Rvalue,Gvalue,Bvalue=tester.measureArduinoSensor()
 
 	time.sleep(tester.pauseInSecsBeforeEmptyingMixingChamber)
 
@@ -689,8 +747,8 @@ def getDirectReadResults(tester,ts,sequenceName):
 	return results
 
 def runTitration(tester,ts,sequenceName):
-	global rgb
-	l,a,b,rgb=tester.measureArduinoSensor()
+	global BGR
+	l,a,b,BGR,Rvalue,Gvalue,Bvalue=tester.measureArduinoSensor()
 
 	try:
 		if ts.agitateMixtureSecs>0:
@@ -1099,14 +1157,16 @@ def runTitration(tester,ts,sequenceName):
 		return None
 
 def runKHTest(tester,ts,sequenceName):
+	from datetime import datetime as dt
+	from tester.models import TesterExternal,TestDefinition,JobExternal
 	PHmin = 6.5
 	PHmax = 9
-	PHStartSlowReagentDose = 5.8
+	PHStartSlowReagentDose = 6
 	PHreachpoint = 4.5
 	reagentDoseFastAmount = 0.50
 	reagentDoseSlowAmount = 0.05
+	KHRemeasureValue = 0.5
 	testSucceeded=None
-
 
 	#tester.infoMessage('Start KH Tester') 
 	#tester.testStatus='Start KH Tester'
@@ -1141,15 +1201,15 @@ def runKHTest(tester,ts,sequenceName):
 		print ('test failed because PH out of start range')
 		testSucceeded=False
 
-	tester.mixerJarMotorCommandManual(0.55)
+	tester.mixerJarMotorCommandManual(1)
 	tester.infoMessage('Dose first reagent amount') 
 	tester.testStatus='Dose first reagent amount'
 	tester.reagentPumpCommand(ts.titrationFirstSkip)
 	doseTotalReagent+=ts.titrationFirstSkip
 
 	while doseTotalReagent<=ts.titrationMaxAmount and testSucceeded==None:
-		tester.infoMessage('Dosed ' + str(doseTotalReagent) + 'ML') 
-		tester.testStatus='Dosed ' + str(doseTotalReagent) + 'ML'
+		tester.infoMessage('Dosed ' + str(doseTotalReagent) + 'ML and PH is ' + str(PH)) 
+		tester.testStatus='Dosed ' + str(doseTotalReagent) + 'ML and PH is ' + str(PH)
 		if PH>PHStartSlowReagentDose:
 			#Mixer motor
 			tester.reagentPumpCommand(reagentDoseFastAmount)
@@ -1180,8 +1240,6 @@ def runKHTest(tester,ts,sequenceName):
 		KHValue = None
 		sendEvaluateAlarm(tester,sequenceName)
 
-
-
 	tester.infoMessage('Empty jar to drain') 
 	tester.testStatus='Empty jar to drain'
 	tester.drainPumpCommand(60)
@@ -1199,6 +1257,23 @@ def runKHTest(tester,ts,sequenceName):
 
 	if tester.lastReagentRemainingML<tester.reagentRemainingMLAlarmThresholdKHTester and tester.reagentAlmostEmptyAlarmEnable:
 		sendReagentAlarm(tester,ts.titrationSlot,tester.lastReagentRemainingML)
+
+	LastKHValue,LastKHTime = tester.readLastKHTestResult(sequenceName)
+	print (LastKHValue,LastKHTime)
+
+	lastKHWithExtraTime=LastKHTime + datetime.timedelta(hours=0.5)
+	if KHValue >= (LastKHValue+KHRemeasureValue) or KHValue <= (LastKHValue-KHRemeasureValue):
+		print('KH test needs to be remeasured because out of accetable range, now check for time.')
+		if lastKHWithExtraTime <= dt.now():
+			print('test has to be redone, test will be scheduled again')
+			te=TesterExternal.objects.get(pk=1)
+			newJob=JobExternal()
+			newJob.jobToRun=TestDefinition.objects.get(testName=sequenceName)
+			newJob.save()
+		else:
+			print('test is already done again, no further action needed.')
+	else:
+		print('test is in accetable range.')
 
 	return KHValue
 
@@ -1232,9 +1307,10 @@ def runTestSequence(tester,sequenceName):
 	tester.infoMessage('Running Test ' + sequenceName) 
 	tester.currentTest=sequenceName
 	testSucceeded=None
+	global BGR
 	try:
 		ts=tester.testSequenceList[sequenceName]
-		
+
 		if ts.KHtestwithPHProbe:
 			if not ts.titrationSlot is None:
 				if (ReagentSetup.objects.get(slotName=ts.titrationSlot).fluidRemainingInML)<tester.reagentRemainingMLAlarmThresholdKHTester:
@@ -1289,7 +1365,12 @@ def runTestSequence(tester,sequenceName):
 							testSucceeded=success
 				if testSucceeded and not tester.abortJob:
 					if ts.titrationSlot is None:
-						results=getDirectReadResults(tester,ts,sequenceName)
+						if not ts.colorChartToUse is None:
+							results=getDirectReadResultsRGBColor(tester,ts,sequenceName)
+
+						if not ts.lightAbsorptionTest is None:
+							results=getDirectReadResultsWithArbsorption(tester,ts,sequenceName)
+
 						if results is None:
 							testSucceeded=False
 					else:
@@ -1322,8 +1403,7 @@ def runTestSequence(tester,sequenceName):
 		tester.debugLog.exception('Failure when running Test')
 	tester.turnAgitatorOff()
 	tester.systemStatus="Idle"
-	global rgb
-	rgb=255,255,255
+	BGR=255,255,255
 	return testSucceeded
 
 def dailyMaintenance():

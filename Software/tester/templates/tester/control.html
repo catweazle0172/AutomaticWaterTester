@@ -4,43 +4,34 @@
 <img src='http://{{streamingURL}}/tester.mjpg'  title="Live feed from inside the autotester">
 <form action="/tester/control/" method="post" id="queueTest">
 {% csrf_token %}
-<table>
+<br>
+<table border="1" class="controlTable">
+<td>Color Measuring Parameter results:</td>
+{{MeasuredParametersData}}
 <tr>
-<td>Select Step Size for Motion Controls:</td>
-{% for step in stepSizeList %}
-	{% if step == lastStepSize %}
-		<td><input type="radio" name="stepSize" title="Select step size for operations below" checked="checked" value="{{step}}"><label>{{step}}</label></td>
-	{% else %}
-		<td><input type="radio" name="stepSize" title="Select step size for operations below" value="{{step}}"><label>{{step}}</label></td>
-	{% endif %}
-{% endfor %}
-<td> (degrees or mm)</td>
+<td></td>
 </tr>
 </table>
+<br>
 <div>
 <table border="1" class="controlTable">
 <tr>
 <td><input type='submit' class="controlButton" title="Clean the mixing cylinder" name='button' value='Clean'></td>
 <td><input type='submit' class="controlButton" title="Fill the mixing cylinder to 5ML" name='button' value='Fill5ML'></td>
 <td><input type='submit' class="controlButton" title="Turn all motors off" name='button' value='MotorsOff'></td>
-<td></td><td></td>
-<td><input type='submit' class="controlButton" title='Moves plunger UP by selected step size (in mm)' name='button' value='PlungerUp'></td>
 <td><input type='submit' class="controlButton" title="Opens the reagent stoppers" name='button' value='OpenStoppers'></td>
-<td><input type='submit' class="controlButton" title="Turn on LEDs" name='button' value='LEDOn'></td>
+<td><input type='submit' class="controlButton" title="Calibrate Measurement" name='button' value='CalibrateMeasurement'></td>
 </tr><tr>
 <td><input type='submit' class="controlButton" title="Turn on the pump" name='button' value='PumpOn'></td>
 <td><input type='submit' class="controlButton" title="Open the mixer valve" name='button' value='ValveOpn'></td>
 <td><input type='submit' class="controlButton" title="Start agitation" name='button' value='AgitatorOn' ></td>
-<td></td><td></td>
-<td><input type='submit' class="controlButton" title='Moves plunger DOWN by selected step size (in mm)' name='button' value='PlungerDn'></td>
+
 <td><input type='submit' class="controlButton" title="Closes the reagent stoppers" name='button' value='CloseStoppers'></td>
-<td><input type='submit' class="controlButton" title="Turn off LEDs" name='button' value='LEDOff'></td>
+<td><input type='submit' class="controlButton" title="Color Measure" name='button' value='Measure'></td>
 </tr><tr>
 <td><input type='submit' class="controlButton" title="Turn off the pump" name='button' value='PumpOff'></td>
 <td><input type='submit' class="controlButton" title="Close the mixer valve" name='button' value='ValveCls'></td>
 <td><input type='submit' class="controlButton" title="Stop agitation" name='button' value='AgitatorOff'></td>
-<td></td><td></td>
-<td><input type='submit' class="controlButton" title='Rotate Clockwise by selected step size (degrees)' name='button' value='CarouselCW'></td>
 <td><input type='submit' class="controlButton" title='Center the reagent automatically' name='button' value='Center' ALIGN='Middle Top' ></td>
 <td><input type='submit' class="controlButton" title='Rotate CounterClockwise by selected step size (degrees)' name='button' value='CarouselCCW'></td>
 </tr>

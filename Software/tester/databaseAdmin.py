@@ -3,7 +3,7 @@ from django.contrib import admin
 from .models import TesterExternal,TesterProcessingParameters,TestResultsExternal, \
     ColorSheetExternal,TestDefinition,TesterFeatureExternal, \
     LightingConditionsExternal,SwatchExternal,ReagentSetup, \
-    JobExternal,HourChoices,TestSchedule,TesterStartupInfo
+    JobExternal,HourChoices,TestSchedule,TesterStartupInfo,CalibrationValues,LightAbsorptionColorSetup,MeasuredParameters
 
 admin.site.register(TesterExternal)
 admin.site.register(TesterProcessingParameters)
@@ -18,3 +18,6 @@ admin.site.register(JobExternal)
 admin.site.register(HourChoices)
 admin.site.register(TestSchedule)
 admin.site.register(TesterStartupInfo)
+admin.site.register(CalibrationValues)
+admin.site.register(LightAbsorptionColorSetup)
+admin.site.register(MeasuredParameters)

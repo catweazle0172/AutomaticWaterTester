@@ -18,13 +18,15 @@ from . import views
 app_name='tester'
 urlpatterns = [
     #ex: /tester
-    url(r'^(?P<formResult>)$', views.index, name='index'),
+    url(r'^(?P<formResult>[\w-]*)$',views.index,name='index'),
     #ex: /tester/home
-    url(r'^home/?(?P<formResult>[\w-]*)$', views.home, name='home'),
+    url(r'^home/?(?P<formResult>[\w-]*)$',views.home,name='home'),
     #ex: /tester/home
-    url(r'^history/?(?P<formResult>[\w-]*)$', views.history, name='history'),
+    url(r'^history/?(?P<formResult>[\w-]*)$',views.history,name='history'),
     #ex: /tester/control
     url(r'^control/?(?P<formResult>[\w-]*)$',views.control,name='control'),
+    #ex: /tester/calibrate
+    url(r'^calibrate/?(?P<formResult>[\w-]*)$',views.calibrate,name='calibrate'),
     #ex: /tester/train
     url(r'^reagent/?(?P<formResult>[\w-]*)$',views.reagent,name='reagent'),
     #ex: /tester/train

@@ -10,11 +10,13 @@ This module configures the autotester database models for django.
 
 @author: Stephen Hayes
 '''
-
 from django.db import models
+from django import forms
 from datetime import datetime
 from django.forms import ModelForm
 from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
+from django.contrib.postgres.fields import ArrayField
+import django.contrib.postgres.fields
 
 # Create your models here.
 class TesterExternal(models.Model):
@@ -34,8 +36,8 @@ class TesterExternal(models.Model):
     mixerCleanML = models.IntegerField(default=8,validators=[MinValueValidator(1),MaxValueValidator(10),])
     mixerCleanCycles = models.IntegerField(default=2,validators=[MinValueValidator(1),MaxValueValidator(4),])
     mixerCleanCyclesExtraAfterHours = models.IntegerField(default=2,validators=[MinValueValidator(1),MaxValueValidator(48),])
-    stepsFor1ML = models.FloatField(default=1,validators=[MinValueValidator(.1),MaxValueValidator(10000),])
-    reagentRemainingMLAlarmThreshold = models.FloatField(default=1.0,validators=[MinValueValidator(0),MaxValueValidator(10)])
+    reagentRemainingMLAlarmThresholdAutoTester = models.FloatField(default=5.0,validators=[MinValueValidator(0),MaxValueValidator(10)])
+    reagentRemainingMLAlarmThresholdKHTester = models.FloatField(default=50.0,validators=[MinValueValidator(0),MaxValueValidator(100)])
     reagentAlmostEmptyAlarmEnable = models.BooleanField(default=True)
     pauseInSecsBeforeEmptyingMixingChamber = models.IntegerField(default=10,validators=[MinValueValidator(0),MaxValueValidator(3600)])
     sendMeasurementReports = models.BooleanField(default=False)
@@ -48,7 +50,23 @@ class TesterExternal(models.Model):
    
     def __str__(self):
         return self.testerName
-            
+
+class CalibrationValues(models.Model):
+    calibrationMLAutotester = models.FloatField(default=1,validators=[MinValueValidator(1),MaxValueValidator(15)])
+    calibrationMLKHSample = models.FloatField(default=1,validators=[MinValueValidator(1),MaxValueValidator(100)]) 
+    calibraitonMLKHReagent = models.FloatField(default=1,validators=[MinValueValidator(1),MaxValueValidator(30)]) 
+  
+class MeasuredParameters(models.Model):
+    R = models.IntegerField(default=255,validators=[MinValueValidator(0),MaxValueValidator(255)])
+    G = models.IntegerField(default=255,validators=[MinValueValidator(0),MaxValueValidator(255)])
+    B = models.IntegerField(default=255,validators=[MinValueValidator(0),MaxValueValidator(255)])
+    abR = models.FloatField(default=0)
+    abG = models.FloatField(default=0)
+    abB = models.FloatField(default=0)
+    labL = models.FloatField(default=0)
+    labA= models.FloatField(default=0)
+    labB = models.FloatField(default=0)
+
 class TesterProcessingParameters(models.Model):
     cameraChannel = models.CharField(max_length=100, default='0')
     cameraIllumSource = models.CharField(max_length=100, default='LED')
@@ -77,9 +95,8 @@ class TestResultsExternal(models.Model):
     class Meta:
         ordering = ['datetimePerformed']
 
-
 class ReagentSetup(models.Model):
-    slotName = models.CharField(max_length=1, default='A',unique=True, help_text="The carousel slot letter")
+    slotName = models.CharField(max_length=2, default='A',unique=True, help_text="The carousel slot letter")
     reagentName = models.CharField(max_length=40, default=None, null=True, help_text="A descriptive name of the reagent")
     used = models.BooleanField(default=False, help_text="Is there anything in the slot (an empty syringe is No)")
     hasAgitator = models.BooleanField(default=False, help_text="Is there an agitator magnet in the syringe")
@@ -105,11 +122,20 @@ class ColorSheetExternal(models.Model):
     class Meta:
         ordering = ['colorSheetName']
 
+class LightAbsorptionColorSetup(models.Model):
+    LightAbsorptionColor = models.CharField(max_length=40, default=None,unique=True, help_text="Name of the Light Absorption Color.")
+
+    def __str__(self):
+        return self.LightAbsorptionColor
+    
+    class Meta:
+        ordering = ['LightAbsorptionColor']
 
 class TestDefinition(models.Model):
     testName = models.CharField(max_length=40, default='New Test',unique=True, blank=False, validators=[RegexValidator(regex='^New Test$',message='Pick a better name than New Test',inverse_match=True)])
     enableTest = models.BooleanField(default=True)
-    waterVolInML = models.FloatField(default=5.0, validators=[MinValueValidator(1),MaxValueValidator(12),])
+    KHtestwithPHProbe = models.BooleanField(default=False)
+    waterVolInML = models.FloatField(default=5.0, validators=[MinValueValidator(1),MaxValueValidator(65),])
     reagent1Slot = models.ForeignKey(ReagentSetup, related_name="reagent1", on_delete=models.CASCADE, null=True,blank=True)
     reagent1Amount = models.FloatField(default=0, null=True, validators=[MinValueValidator(0),MaxValueValidator(1.1)])
     reagent1AgitateSecs = models.IntegerField(default=0, null=True, validators=[MinValueValidator(0),MaxValueValidator(1000)])
@@ -134,9 +160,12 @@ class TestDefinition(models.Model):
     titrationAgitateSecs = models.IntegerField(default=10, null=True, validators=[MinValueValidator(0),MaxValueValidator(1000)])
     titrationAgitateMixerSecs = models.FloatField(default=10, null=True, validators=[MinValueValidator(0),MaxValueValidator(1000)])
     titrationTransition = models.FloatField(default=.5, null=True, validators=[MinValueValidator(0),MaxValueValidator(1)])
-    titrationMaxAmount = models.FloatField(default=1, null=True, validators=[MinValueValidator(.05),MaxValueValidator(2)])
-    titrationFirstSkip = models.FloatField(default=0, null=True, validators=[MinValueValidator(0),MaxValueValidator(0.99)])
-    colorChartToUse = models.ForeignKey(ColorSheetExternal, on_delete=models.CASCADE)
+    titrationMaxAmount = models.FloatField(default=1, null=True, validators=[MinValueValidator(.05),MaxValueValidator(16)])
+    titrationFirstSkip = models.FloatField(default=0, null=True, validators=[MinValueValidator(0),MaxValueValidator(6)])
+    colorChartToUse = models.ForeignKey(ColorSheetExternal, on_delete=models.CASCADE, null=True,blank=True)
+    lightAbsorptionTest = models.ForeignKey(LightAbsorptionColorSetup, related_name="lightcolor", on_delete=models.CASCADE, null=True,blank=True)
+    lightAbsorptionValue = models.CharField(max_length=100, null=True, blank=True)
+    lightAbsorptionResult = models.CharField(max_length=100, null=True, blank=True)
     tooLowAlarmThreshold = models.FloatField(default=None, null=True, blank=True)
     tooLowWarningThreshold = models.FloatField(default=None, null=True, blank=True)
     tooHighWarningThreshold = models.FloatField(default=None, null=True, blank=True)

@@ -291,7 +291,6 @@ class resultsSwatch:
     def __init__(self):
         self.swatchDropCount=None
         self.valueAtSwatch=0
-        self.lightingConditions='LED'
         self.channel1=0
         self.channel2=0
         self.channel3=0
@@ -411,13 +410,14 @@ def findClosestSwatchMatch(tester,colorSheetName,l,a,b):
             minDistance=swatchDistance
     return  closestValue
         
-def evaluateColor(tester,image,colorSheetName):
-    l,a,b=tester.measureArduinoSensor()
-    closestValue=findClosestSwatchMatch(tester,colorSheetName,l,a,b)
+def evaluateColor(tester,colorSheetName,results):
+    l,a,b,BGR,Rvalue,Gvalue,Bvalue=tester.measureArduinoSensor()
     resultSwatch=resultsSwatch()
+    resultSwatch.valueAtSwatch=results
+    if colorSheetName is not None:
+        closestValue=findClosestSwatchMatch(tester,colorSheetName,l,a,b)
+        resultSwatch.valueAtSwatch=closestValue
     resultSwatch.swatchDropCount=None
-    resultSwatch.valueAtSwatch=closestValue
-    resultSwatch.lightingConditions='LED'
     resultSwatch.channel1=l
     resultSwatch.channel2=a
     resultSwatch.channel3=b
@@ -471,7 +471,7 @@ def findClosestBinarySwatchMatch(tester,colorSheetName,l,a,b):
     return  closestValue
         
 def evaluateColorBinary(tester,image,colorSheetName):
-    l,a,b=tester.measureArduinoSensor()
+    l,a,b,BGR,Rvalue,Gvalue,Bvalue=tester.measureArduinoSensor()
     closestValue=findClosestBinarySwatchMatch(tester,colorSheetName,l,a,b)
     resultSwatch=resultsSwatch()
     resultSwatch.swatchDropCount=None

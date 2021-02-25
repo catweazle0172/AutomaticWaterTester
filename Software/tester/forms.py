@@ -14,7 +14,7 @@ This module configures the autotester web forms for django.
 from django import forms
 #from django.forms import modelformset_factory, Textarea
 
-from .models import TestSchedule,TestDefinition,ReagentSetup,TesterExternal
+from .models import TestSchedule,TestDefinition,ReagentSetup,TesterExternal,CalibrationValues,MeasuredParameters
 
 class ScheduleForm(forms.ModelForm):
     class Meta:
@@ -93,10 +93,10 @@ class TesterForm(forms.ModelForm):
             self.fields['mixerCleanCycles'].widget.attrs['title'] = "How many times to clean the mixer at the beginning of each test"
             self.fields['mixerCleanCyclesExtraAfterHours'].label="Clean Mixer extra after hour"
             self.fields['mixerCleanCyclesExtraAfterHours'].widget.attrs['title'] = "Give 2 more cleaning cycles after last test hours ago"
-            self.fields['stepsFor1ML'].label="Total steps for 1ML"
-            self.fields['stepsFor1ML'].widget.attrs['title'] = "Steps that the stepper motor has to make to get 1ML"
-            self.fields['reagentRemainingMLAlarmThreshold'].label="Reagent Low Threshold"
-            self.fields['reagentRemainingMLAlarmThreshold'].widget.attrs['title'] = "A reagent is considered low when this many usable ML remain"
+            self.fields['reagentRemainingMLAlarmThresholdAutoTester'].label="Reagent Low Threshold AutoTester"
+            self.fields['reagentRemainingMLAlarmThresholdAutoTester'].widget.attrs['title'] = "A reagent is considered low when this many usable ML remain at AutoTester"
+            self.fields['reagentRemainingMLAlarmThresholdKHTester'].label="Reagent Low Threshold KH Tester"
+            self.fields['reagentRemainingMLAlarmThresholdKHTester'].widget.attrs['title'] = "A reagent is considered low when this many usable ML remain at KH Tester"
             self.fields['reagentAlmostEmptyAlarmEnable'].label="Send Reagent Low Alarms"
             self.fields['reagentAlmostEmptyAlarmEnable'].widget.attrs['title'] = "Check if you want AutoTester to notify you when a reagent is low"
             self.fields['sendMeasurementReports'].label="Enable Measurement Reports"
@@ -112,5 +112,48 @@ class TesterForm(forms.ModelForm):
             self.fields['manageDatabases'].label="Manage Databases"
             self.fields['manageDatabases'].widget.attrs['title'] = "Checking this and restarting will give access to the internal databases.  Caution in making changes"
 
+class CalibrationForm(forms.ModelForm):
+    class Meta:
+        model = CalibrationValues
+        exclude=()
+#        widgets = {
+#            'testToSchedule': Textarea(attrs={'cols': 80, 'rows': 20}),
+#        }
+    def __init__(self, *args, **kwargs):
+        super(CalibrationForm, self).__init__(*args, **kwargs)
+        if self.instance.id:
+            self.fields['calibrationMLAutotester'].label="Total ML AutoTester"
+            self.fields['calibrationMLAutotester'].widget.attrs['title'] = "Total dosed liquid in ML Autotester"
+            self.fields['calibrationMLKHSample'].label="Total ML KH Sample Water"
+            self.fields['calibrationMLKHSample'].widget.attrs['title'] = "Total dosed liquid in ML KH Sample Water"
+            self.fields['calibraitonMLKHReagent'].label="Total ML KH Reagent"
+            self.fields['calibraitonMLKHReagent'].widget.attrs['title'] = "Total dosed liquid in ML KH Reagent"
 
-
+class MeasuredParametersForm(forms.ModelForm):
+    class Meta:
+        model = MeasuredParameters
+        exclude=()
+#        widgets = {
+#            'testToSchedule': Textarea(attrs={'cols': 80, 'rows': 20}),
+#        }
+    def __init__(self, *args, **kwargs):
+        super(MeasuredParametersForm, self).__init__(*args, **kwargs)
+        if self.instance.id:
+            self.fields['R'].label="Red"
+            self.fields['R'].widget.attrs['title'] = "Red"
+            self.fields['G'].label="Green"
+            self.fields['G'].widget.attrs['title'] = "Green"
+            self.fields['B'].label="Blue"
+            self.fields['B'].widget.attrs['title'] = "Blue"
+            self.fields['abR'].label="Arbsorption Red"
+            self.fields['abR'].widget.attrs['title'] = "Arbsorption Red"
+            self.fields['abG'].label="Arbsorption Green"
+            self.fields['abG'].widget.attrs['title'] = "Arbsorption Green"
+            self.fields['abB'].label="Arbsorption Blue"
+            self.fields['abB'].widget.attrs['title'] = "Arbsorption Blue"
+            self.fields['labL'].label="labL"
+            self.fields['labL'].widget.attrs['title'] = "labL"
+            self.fields['labA'].label="labA"
+            self.fields['labA'].widget.attrs['title'] = "labA"
+            self.fields['labB'].label="labB"
+            self.fields['labB'].widget.attrs['title'] = "labB"

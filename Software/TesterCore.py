@@ -133,6 +133,8 @@ class Tester:
 			GPIO.output(KHReagentPumpDirectionGPIO,GPIO.LOW)
 			pca62.motor3.throttle = 1		#Close valve Tank Water
 			pca62.motor4.throttle = 1		#Close valve Osmose Water
+			pca60.motor2.throttle = 0
+			pca60.motor4.throttle = 0
 		self.ArduinoStepper=False
 		self.ArduinoSensor=False
 		self.hommeArduinoStepper=False
@@ -370,7 +372,14 @@ class Tester:
 			ts.titrationTransition=seq.titrationTransition
 			ts.titrationMaxAmount=seq.titrationMaxAmount
 			ts.titrationFirstSkip=seq.titrationFirstSkip
-			ts.colorChartToUse=seq.colorChartToUse.colorSheetName
+			ts.colorChartToUse=seq.colorChartToUse
+			if not ts.colorChartToUse is None:
+				ts.colorChartToUse=seq.colorChartToUse.colorSheetName
+			ts.lightAbsorptionTest=seq.lightAbsorptionTest
+			if not ts.lightAbsorptionTest is None:
+				ts.lightAbsorptionColor=seq.lightAbsorptionTest.LightAbsorptionColor
+			ts.lightAbsorptionValue=seq.lightAbsorptionValue
+			ts.lightAbsorptionResult=seq.lightAbsorptionResult
 			ts.tooLowAlarmThreshold=seq.tooLowAlarmThreshold
 			ts.tooLowWarningThreshold=seq.tooLowWarningThreshold
 			ts.tooHighWarningThreshold=seq.tooHighWarningThreshold
@@ -1213,15 +1222,31 @@ class Tester:
 		G255=255-(Gvalue*255)
 		B255=255-(Bvalue*255)
 
-		rgb255=(R255,G255,B255)
+		bgr255=(B255,G255,R255)
 		
+		print (bgr255)
+
 		Rvalue1 = (1-Rvalue)
 		Gvalue1 = (1-Gvalue)
 		Bvalue1 = (1-Bvalue)
 
 		rgb=sRGBColor(Rvalue1,Gvalue1,Bvalue1)
 		lab = convert_color(rgb, LabColor)
-		return lab.lab_l,lab.lab_a,lab.lab_b,rgb255
+
+		from tester.models import MeasuredParameters
+		MeasureInfoFromDB=MeasuredParameters.objects.get(pk=1)
+		MeasureInfoFromDB.R=R255
+		MeasureInfoFromDB.G=G255
+		MeasureInfoFromDB.B=B255
+		MeasureInfoFromDB.abR=Rvalue
+		MeasureInfoFromDB.abG=Gvalue
+		MeasureInfoFromDB.abB=Bvalue
+		MeasureInfoFromDB.labL=lab.lab_l
+		MeasureInfoFromDB.labA=lab.lab_a
+		MeasureInfoFromDB.labB=lab.lab_b
+		MeasureInfoFromDB.save()
+
+		return lab.lab_l,lab.lab_a,lab.lab_b,bgr255,Rvalue,Gvalue,Bvalue
 
 	def calculateLastTest(self):
 		from tester.models import TestResultsExternal
@@ -1231,23 +1256,31 @@ class Tester:
 		if lastTestResultWithExtraTime <= dt.now():
 			return True
 
+	def readLastKHTestResult(self,sequenceName):
+		from tester.models import TestResultsExternal
+		KHTests=TestResultsExternal.objects.filter(testPerformed=sequenceName)
+		LastKHTest=KHTests.last()
+		LastKHValue=LastKHTest.results
+		LastKHTime=LastKHTest.datetimePerformed
+		return LastKHValue,LastKHTime
+
 	def drainPumpCommand(self,sec):
-		pca60.motor1.throttle = 1.0
+		pca60.motor1.throttle = 1
 		time.sleep(sec)
 		pca60.motor1.throttle = 0
 
 	def mixerJarMotorCommand(self,sec):
-		pca60.motor3.throttle = 0.55
-		time.sleep(sec)
-		pca60.motor3.throttle = 0
-
-	def mixerJarMotorCommandManual(self,speed):
-		pca60.motor3.throttle = speed
-
-	def mixerReagentBottleMotorCommand(self,sec):
-		pca60.motor4.throttle = 0.5
+		pca60.motor4.throttle = 1
 		time.sleep(sec)
 		pca60.motor4.throttle = 0
+
+	def mixerJarMotorCommandManual(self,speed):
+		pca60.motor4.throttle = speed
+
+	def mixerReagentBottleMotorCommand(self,sec):
+		pca60.motor2.throttle = 0.5
+		time.sleep(sec)
+		pca60.motor2.throttle = 0
 
 	def read_ph(self):
 		temperature=25

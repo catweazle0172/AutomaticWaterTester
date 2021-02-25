@@ -34,10 +34,6 @@ def sendTestMeasurementReport(tester,testRun,testKey):
     message=('Test Measurement Report sent with ' + tester.testerName + ', ' + testRun + ', This Was a Test')
     telegram_bot_sendtext(message)
 
-    print (datetime.datetime.now())
-    print (datetime.timedelta(seconds=20))
-
-
 def sendReagentAlarm(tester,reagent,remainingML):
     message=('From: ' + tester.testerName + '\nReagent in Slot ' + reagent + ' Low, Remaining ML: '+ (str(remainingML)))
     telegram_bot_sendtext(message)
