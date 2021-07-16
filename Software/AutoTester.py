@@ -300,10 +300,11 @@ def testMixerFill(tester,numCycles):
 	tester.debugLog.info('All test cycles completed. Success: ' + str(successCount) + ', Failures: ' + str(failureCount))            
 	
 def orientTester():
-	tester.connectArduinoStepper()
-	tester.connectArduinoSensor()
-	tester.homingArduinoStepper()
-	tester.infoMessage('Homing Arduino Stepper done')
+	if tester.LineTester is True:
+		tester.connectArduinoStepper()
+		tester.connectArduinoSensor()
+		tester.homingArduinoStepper()
+		tester.infoMessage('Homing Arduino Stepper done')
 	tester.systemStatus="Idle"
 	tester.infoMessage('Orientation done!')
 
@@ -1201,7 +1202,7 @@ def runKHTest(tester,ts,sequenceName):
 		print ('test failed because PH out of start range')
 		testSucceeded=False
 
-	tester.mixerJarMotorCommandManual(1)
+	tester.mixerJarMotorCommandManual(0.5)
 	tester.infoMessage('Dose first reagent amount') 
 	tester.testStatus='Dose first reagent amount'
 	tester.reagentPumpCommand(ts.titrationFirstSkip)
@@ -1484,17 +1485,17 @@ def setJobSchedules(testName):
 		elif daysToRun=='Sunday':
 			schedule.every().sunday.at(hour).do(queueTestJob,tester,testName).tag(testName)
 		elif daysToRun=='Monday':
-			schedule.every().sunday.at(hour).do(queueTestJob,tester,testName).tag(testName)
+			schedule.every().monday.at(hour).do(queueTestJob,tester,testName).tag(testName)
 		elif daysToRun=='Tuesday':
-			schedule.every().sunday.at(hour).do(queueTestJob,tester,testName).tag(testName)
+			schedule.every().tuesday.at(hour).do(queueTestJob,tester,testName).tag(testName)
 		elif daysToRun=='Wednesday':
-			schedule.every().sunday.at(hour).do(queueTestJob,tester,testName).tag(testName)
+			schedule.every().wednesday.at(hour).do(queueTestJob,tester,testName).tag(testName)
 		elif daysToRun=='Thursday':
-			schedule.every().sunday.at(hour).do(queueTestJob,tester,testName).tag(testName)
+			schedule.every().thursday.at(hour).do(queueTestJob,tester,testName).tag(testName)
 		elif daysToRun=='Friday':
-			schedule.every().sunday.at(hour).do(queueTestJob,tester,testName).tag(testName)
+			schedule.every().friday.at(hour).do(queueTestJob,tester,testName).tag(testName)
 		elif daysToRun=='Saturday':
-			schedule.every().sunday.at(hour).do(queueTestJob,tester,testName).tag(testName)
+			schedule.every().saturday.at(hour).do(queueTestJob,tester,testName).tag(testName)
 
 def resetJobSchedules():
 	clearJobSchedules()
@@ -1503,7 +1504,7 @@ def resetJobSchedules():
 			setJobSchedules(ts) 
 		except:
 			pass 
-	schedule.every().day.at('22:09').do(dailyMaintenance).tag('Maintenance')
+	schedule.every().day.at('13:32').do(dailyMaintenance).tag('Maintenance')
 
 def testerJobScheduler():
 	resetJobSchedules()

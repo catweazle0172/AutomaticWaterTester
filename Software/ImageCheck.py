@@ -470,7 +470,7 @@ def findClosestBinarySwatchMatch(tester,colorSheetName,l,a,b):
             minDistance=swatchDistance
     return  closestValue
         
-def evaluateColorBinary(tester,image,colorSheetName):
+def evaluateColorBinary(tester,image,colorSheetName,l,a,b):
     l,a,b,BGR,Rvalue,Gvalue,Bvalue=tester.measureArduinoSensor()
     closestValue=findClosestBinarySwatchMatch(tester,colorSheetName,l,a,b)
     resultSwatch=resultsSwatch()

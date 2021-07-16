@@ -82,11 +82,6 @@ ph      = DFRobot_PH()
 PHsamplesBetweenTest = 5
 temperature	= 25.0
 
-#I2C
-pca60 = MotorKit(address=0x60)
-pca61 = MotorKit(address=0x61)
-pca62 = MotorKit(address=0x62)
-
 class testSequence:
 	def __init__(self,name):
 		self.testName=name
@@ -104,6 +99,8 @@ class Tester:
 	PRESENTATION_IMPERIAL=1
 	
 	def __init__(self, id):
+		self.KHTester = True
+		self.LineTester = False
 		self.id = id
 		self.simulation=(platform.system()=='Windows')
 		self.basePath=getBasePath()
@@ -131,10 +128,18 @@ class Tester:
 			GPIO.output(KHReagentPumpEnableGPIO,GPIO.HIGH)
 			GPIO.output(KHReagentPumpStepGPIO,GPIO.LOW)
 			GPIO.output(KHReagentPumpDirectionGPIO,GPIO.LOW)
-			pca62.motor3.throttle = 1		#Close valve Tank Water
-			pca62.motor4.throttle = 1		#Close valve Osmose Water
-			pca60.motor2.throttle = 0
-			pca60.motor4.throttle = 0
+
+		if self.KHTester is True:
+			self.pca60 = MotorKit(address=0x60)
+			self.pca60.motor2.throttle = 0
+			self.pca60.motor4.throttle = 0
+
+		if self.LineTester is True:
+			self.pca61 = MotorKit(address=0x61)
+			self.pca62 = MotorKit(address=0x62)
+			self.pca62.motor3.throttle = 1		#Close valve Tank Water
+			self.pca62.motor4.throttle = 1		#Close valve Osmose Water
+
 		self.ArduinoStepper=False
 		self.ArduinoSensor=False
 		self.hommeArduinoStepper=False
@@ -681,65 +686,65 @@ class Tester:
 			return dst
 
 	def mainDrainPump(self,sec):
-		pca61.motor2.throttle = 1
+		self.pca61.motor2.throttle = 1
 		self.MainDrainPumpOn=True
 		time.sleep(sec)
-		pca61.motor2.throttle = 0
+		self.pca61.motor2.throttle = 0
 		self.MainDrainPumpOn=False
 		return
 
 	def osmoseCleanPump(self,sec):
-		pca61.motor3.throttle = 1
+		self.pca61.motor3.throttle = 1
 		self.cleanPumpOn=True
 		time.sleep(sec)
-		pca61.motor3.throttle = 0
+		self.pca61.motor3.throttle = 0
 		self.cleanPumpOn=False
 		return
 
 	def cleanDrainPump(self,sec):
 		if sec==0:
-			pca61.motor4.throttle = 1
+			self.pca61.motor4.throttle = 1
 			self.cleanDrainPumpOn=True
 			return
 		else: 	
-			pca61.motor4.throttle = 1
+			self.pca61.motor4.throttle = 1
 			self.cleanDrainPumpOn=True
 			time.sleep(sec)
-			pca61.motor4.throttle = 0
+			self.pca61.motor4.throttle = 0
 			self.cleanDrainPumpOn=False
 			return
 			
 	def cleanDrainPumpOff(self):
-		pca61.motor4.throttle = 0
+		self.pca61.motor4.throttle = 0
 		self.cleanDrainPumpOn=False
 		return
 
 	def turnAgitator(self,sec):
 		if sec==0:
-			pca61.motor1.throttle = 0.3
+			self.pca61.motor1.throttle = 0.3
 			time.sleep(0.1)
-			pca61.motor1.throttle = 0.2
+			self.pca61.motor1.throttle = 0.2
 			self.agitatorOn=True
 			return
 		else: 	
-			pca61.motor1.throttle = 0.3
+			self.pca61.motor1.throttle = 0.3
 			self.agitatorOn=True
 			time.sleep(0.1)
-			pca61.motor1.throttle = 0.2
+			self.pca61.motor1.throttle = 0.2
 			time.sleep(sec)
-			pca61.motor1.throttle = 0
+			self.pca61.motor1.throttle = 0
 			self.agitatorOn=False
 			return
 
 	def turnAgitatorOff(self):
-		pca61.motor1.throttle = 0
+		self.pca61.motor1.throttle = 0
 		self.agitatorOn=False
 		return
 
 	def calibrateAutoTesterPump(self):
 		RampUpTimeDelay = 0.005
-		pca62.motor3.throttle = 0		#Open valve Tank Water
-		pca62.motor4.throttle = 1		#Close valve Osmose Water
+		self.pca62.motor3.throttle = 0		#Open valve Tank Water
+		self.pca62.motor4.throttle = 1		#Close valve Osmose Water
 		if not self.mainPumpEnabled:
 			GPIO.output(mainPumpEnableGPIO,GPIO.LOW)
 			time.sleep(.0005)
@@ -748,7 +753,7 @@ class Tester:
 		GPIO.output(mainPumpDirectionGPIO,GPIO.LOW)
 		stepCountThisPump=0
 		stepDelay=.0001
-		stepsToPump=100000
+		stepsToPump=65000
 		print (stepsToPump)
 
 		while stepCountThisPump<stepsToPump:
@@ -764,8 +769,8 @@ class Tester:
 
 		self.mainPumpEnabled=False     
 		GPIO.output(mainPumpEnableGPIO,GPIO.HIGH)
-		pca62.motor3.throttle = 1		#Close valve Tank Water
-		pca62.motor4.throttle = 1		#Close valve Osmose Water
+		self.pca62.motor3.throttle = 1		#Close valve Tank Water
+		self.pca62.motor4.throttle = 1		#Close valve Osmose Water
 		return True  
 
 	def calibrateKHSamplePump(self):
@@ -827,12 +832,13 @@ class Tester:
 	def MixerReactorPump(self,ml,water):
 		RampUpTimeDelay = 0.005
 		if water is 'tankwater':
-			pca62.motor3.throttle = 0		#Open valve Tank Water
-			pca62.motor4.throttle = 1		#Close valve Osmose Water
+			self.pca62.motor3.throttle = 0		#Open valve Tank Water
+			self.pca62.motor4.throttle = 1		#Close valve Osmose Water
+			stepsfor1ml=int(65000 / self.calibrationMLAutotester)
 		elif water is 'osmosewater':
-			pca62.motor3.throttle = 1		#Close valve Tank Water
-			pca62.motor4.throttle = 0		#Open valve Osmose Water
-
+			self.pca62.motor3.throttle = 1		#Close valve Tank Water
+			self.pca62.motor4.throttle = 0		#Open valve Osmose Water
+			stepsfor1ml=int((65000 / self.calibrationMLAutotester)/1.5)
 		if not self.mainPumpEnabled:
 			GPIO.output(mainPumpEnableGPIO,GPIO.LOW)
 			time.sleep(.0005)
@@ -846,8 +852,6 @@ class Tester:
 
 		stepCountThisPump=0
 		stepDelay=.000025
-
-		stepsfor1ml=int(100000 / self.calibrationMLAutotester)
 
 		stepsToPump=ml*stepsfor1ml
 		print (stepsToPump)
@@ -865,8 +869,8 @@ class Tester:
   
 		GPIO.output(mainPumpEnableGPIO,GPIO.HIGH)
 		self.mainPumpEnabled=False
-		pca62.motor3.throttle = 1		#Close valve Tank Water
-		pca62.motor4.throttle = 1		#Close valve Osmose Water
+		self.pca62.motor3.throttle = 1		#Close valve Tank Water
+		self.pca62.motor4.throttle = 1		#Close valve Osmose Water
 		return True  
 
 	def sampleWaterPumpCommand(self,ml):
@@ -1265,22 +1269,22 @@ class Tester:
 		return LastKHValue,LastKHTime
 
 	def drainPumpCommand(self,sec):
-		pca60.motor1.throttle = 1
+		self.pca60.motor1.throttle = 1
 		time.sleep(sec)
-		pca60.motor1.throttle = 0
+		self.pca60.motor1.throttle = 0
 
 	def mixerJarMotorCommand(self,sec):
-		pca60.motor4.throttle = 1
+		self.pca60.motor4.throttle = 0.5
 		time.sleep(sec)
-		pca60.motor4.throttle = 0
+		self.pca60.motor4.throttle = 0
 
 	def mixerJarMotorCommandManual(self,speed):
-		pca60.motor4.throttle = speed
+		self.pca60.motor4.throttle = speed
 
 	def mixerReagentBottleMotorCommand(self,sec):
-		pca60.motor2.throttle = 0.5
+		self.pca60.motor2.throttle = 0.5
 		time.sleep(sec)
-		pca60.motor2.throttle = 0
+		self.pca60.motor2.throttle = 0
 
 	def read_ph(self):
 		temperature=25

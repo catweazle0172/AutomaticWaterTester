@@ -132,9 +132,9 @@ def parseControl(tester,cmdOperation,cmdObject,cmdValue):
         elif cmdOperation=='CleanOsmoseWater':
             osmoseCleanMixerReactor(tester)               
         elif cmdOperation=='Fill5MLTankWater':
-            tester.MixerReactorPump(5,tankwater)
+            tester.MixerReactorPump(5,'tankwater')
         elif cmdOperation=='Fill5MLOsmoseWater':
-            tester.MixerReactorPump(5,osmosewater)
+            tester.MixerReactorPump(5,'osmosewater')
         elif cmdOperation=='HomeSyringe':
             tester.homingArduinoStepper()
         elif cmdOperation=='UpSyringe':
