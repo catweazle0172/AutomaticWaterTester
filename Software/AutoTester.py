@@ -1402,7 +1402,8 @@ def runTestSequence(tester,sequenceName):
 		tester.colorTable=None
 	except:
 		tester.debugLog.exception('Failure when running Test')
-	tester.turnAgitatorOff()
+	if self.KHTester is True:
+		tester.turnAgitatorOff()
 	tester.systemStatus="Idle"
 	BGR=255,255,255
 	return testSucceeded
