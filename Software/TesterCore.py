@@ -640,7 +640,7 @@ class Tester:
 #            traceback.print_exc()
 			self.infoMessage('No camera found')
 			self.systemStatus="Stopped - No Camera Found"
-			self.simulation=True
+			#self.simulation=True
 			return self.CAMERATYPE_NONE
 			
 	def webcamInitialize(self):
