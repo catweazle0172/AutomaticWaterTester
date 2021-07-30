@@ -115,7 +115,7 @@ class TesterForm(forms.ModelForm):
 class CalibrationForm(forms.ModelForm):
     class Meta:
         model = CalibrationValues
-        exclude=()
+        exclude=('pumpStepsAutotester','pumpStepsKHSample','pumpStepsKHReagent')
 #        widgets = {
 #            'testToSchedule': Textarea(attrs={'cols': 80, 'rows': 20}),
 #        }

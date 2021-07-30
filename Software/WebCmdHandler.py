@@ -155,15 +155,21 @@ def parseControl(tester,cmdOperation,cmdObject,cmdValue):
 def parseCalibrate(tester,cmdOperation,cmdObject,cmdValue):
     try:
         if cmdOperation=='DoseAutoTester':
+            tester.loadCalibrationValuesFromDB()
             tester.calibrateAutoTesterPump()
         elif cmdOperation=='DoseKHSample':
+            tester.loadCalibrationValuesFromDB()
             tester.calibrateKHSamplePump()
         elif cmdOperation=='DoseKHReagent':
+            tester.loadCalibrationValuesFromDB()
             tester.calibrateKHReagentPump()
         elif cmdOperation=='CalPH4':
             CalibratePH(tester)
         elif cmdOperation=='CalPH7':
             CalibratePH(tester)
+        elif cmdOperation=='UPDATE':
+            tester.calculateCalibrationValues()
+            tester.loadCalibrationValuesFromDB()
         else:                     
             print('Unknown CALIBRATION operation: ' + cmdOperation)                   
     except:

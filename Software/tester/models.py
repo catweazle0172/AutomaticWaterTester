@@ -55,6 +55,9 @@ class CalibrationValues(models.Model):
     calibrationMLAutotester = models.FloatField(default=1,validators=[MinValueValidator(1),MaxValueValidator(15)])
     calibrationMLKHSample = models.FloatField(default=1,validators=[MinValueValidator(1),MaxValueValidator(100)]) 
     calibraitonMLKHReagent = models.FloatField(default=1,validators=[MinValueValidator(1),MaxValueValidator(30)]) 
+    pumpStepsAutotester = models.IntegerField(default=13000, help_text="Steps for pumping 1ML")
+    pumpStepsKHSample = models.IntegerField(default=22000, help_text="Steps for pumping 1ML")
+    pumpStepsKHReagent = models.IntegerField(default=22000, help_text="Steps for pumping 1ML")
   
 class MeasuredParameters(models.Model):
     R = models.IntegerField(default=255,validators=[MinValueValidator(0),MaxValueValidator(255)])

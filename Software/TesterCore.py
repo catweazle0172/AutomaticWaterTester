@@ -100,7 +100,7 @@ class Tester:
 	
 	def __init__(self, id):
 		self.KHTester = True
-		self.LineTester = False
+		self.LineTester = True
 		self.id = id
 		self.simulation=(platform.system()=='Windows')
 		self.basePath=getBasePath()
@@ -291,6 +291,9 @@ class Tester:
 		self.calibrationMLAutotester=cv.calibrationMLAutotester
 		self.calibrationMLKHSample=cv.calibrationMLKHSample
 		self.calibraitonMLKHReagent=cv.calibraitonMLKHReagent
+		self.pumpStepsAutotester=cv.pumpStepsAutotester
+		self.pumpStepsKHSample=cv.pumpStepsKHSample
+		self.pumpStepsKHReagent=cv.pumpStepsKHReagent
 
 	def loadProcessingParametersFromDB(self):
 		from tester.models import TesterProcessingParameters
@@ -753,7 +756,7 @@ class Tester:
 		GPIO.output(mainPumpDirectionGPIO,GPIO.LOW)
 		stepCountThisPump=0
 		stepDelay=.0001
-		stepsToPump=65000
+		stepsToPump=5*self.pumpStepsAutotester
 		print (stepsToPump)
 
 		while stepCountThisPump<stepsToPump:
@@ -783,7 +786,7 @@ class Tester:
 		GPIO.output(KHSamplePumpDirectionGPIO,GPIO.LOW)
 		stepCountThisPump=0
 		stepDelay=.00001
-		stepsToPump=940000
+		stepsToPump=50*self.pumpStepsKHSample
 		print (stepsToPump)
 
 		while stepCountThisPump<stepsToPump:
@@ -811,7 +814,7 @@ class Tester:
 		GPIO.output(KHReagentPumpDirectionGPIO,GPIO.LOW)
 		stepCountThisPump=0
 		stepDelay=.00001
-		stepsToPump=260000
+		stepsToPump=15*self.pumpStepsKHReagent
 		print (stepsToPump)
 
 		while stepCountThisPump<stepsToPump:
@@ -827,6 +830,8 @@ class Tester:
 
 		self.KHReagentPumpEnabled=False     
 		GPIO.output(KHReagentPumpEnableGPIO,GPIO.HIGH)
+
+
 		return True  
 
 	def MixerReactorPump(self,ml,water):
@@ -834,11 +839,11 @@ class Tester:
 		if water is 'tankwater':
 			self.pca62.motor3.throttle = 0		#Open valve Tank Water
 			self.pca62.motor4.throttle = 1		#Close valve Osmose Water
-			stepsfor1ml=int(65000 / self.calibrationMLAutotester)
+			stepsfor1ml=int(self.pumpStepsAutotester)
 		elif water is 'osmosewater':
 			self.pca62.motor3.throttle = 1		#Close valve Tank Water
 			self.pca62.motor4.throttle = 0		#Open valve Osmose Water
-			stepsfor1ml=int((65000 / self.calibrationMLAutotester)/1.5)
+			stepsfor1ml=int((self.pumpStepsAutotester)/1.5)
 		if not self.mainPumpEnabled:
 			GPIO.output(mainPumpEnableGPIO,GPIO.LOW)
 			time.sleep(.0005)
@@ -887,8 +892,7 @@ class Tester:
 
 		stepCountThisPump=0
 		stepDelay=.00001
-		stepsfor1ml=int(940000 / self.calibrationMLKHSample)
-		stepsToPump=ml*stepsfor1ml
+		stepsToPump=ml*self.pumpStepsKHSample
 		print (stepsToPump)	
 
 		while stepCountThisPump<stepsToPump:
@@ -917,8 +921,7 @@ class Tester:
 
 		stepCountThisPump=0
 		stepDelay=.00002
-		stepsfor1ml=int(260000 / self.calibraitonMLKHReagent)
-		stepsToPump=ml*stepsfor1ml
+		stepsToPump=ml*self.pumpStepsKHReagent
 		print (stepsToPump)
 
 		while stepCountThisPump<stepsToPump:
@@ -1308,6 +1311,26 @@ class Tester:
 		adc0 = ads1115.readVoltage(0)
 		print ("A0:%dmV "%(adc0['r']))
 		ph.calibration(adc0['r'])
+
+
+	def calculateCalibrationValues(self):
+		time.sleep(1)
+		from tester.models import CalibrationValues
+		cv=CalibrationValues.objects.get(pk=1)
+#		self.calibrationMLAutotester=cv.calibrationMLAutotester
+#		self.calibrationMLKHSample=cv.calibrationMLKHSample
+#		self.calibraitonMLKHReagent=cv.calibraitonMLKHReagent
+#		self.pumpStepsAutotester=cv.pumpStepsAutotester
+#		self.pumpStepsKHSample=cv.pumpStepsKHSample
+#		self.pumpStepsKHReagent=cv.pumpStepsKHReagent
+
+		autotesterSteps=cv.pumpStepsAutotester
+		cv.pumpStepsAutotester=int((5*autotesterSteps)/cv.calibrationMLAutotester)
+		KHSampleSteps=cv.pumpStepsKHSample
+		cv.pumpStepsKHSample=int((50*KHSampleSteps)/cv.calibrationMLKHSample)
+		KHReagentSteps=cv.pumpStepsKHReagent
+		cv.pumpStepsKHReagent=int((15*KHReagentSteps)/cv.calibraitonMLKHReagent)
+		cv.save()
 
 def getBasePath():
 	programPath=os.path.realpath(__file__)

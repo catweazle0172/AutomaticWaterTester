@@ -228,14 +228,6 @@ def calibrate(request,formResult):
 
     if request.method=='POST':
         adminAction=request.POST["actionButton"]
-        try:
-            cmd=request.POST['actionButton']
-            sendCmdToTester('CALIBRATE/' + cmd + '/')
-            calInfo=CalibrationValues.objects.get(pk=1)
-            testerCalForm=CalibrationForm(request.POST,instance=calInfo)
-        except:
-            pass
-
         if adminAction=='UPDATE':
             calInfo=CalibrationValues.objects.get(pk=1)
             testerCalForm=CalibrationForm(request.POST,instance=calInfo)
@@ -244,6 +236,14 @@ def calibrate(request,formResult):
                 messages.success(request,'Changes saved. Will take affect after program restarted')
             except:
                 traceback.print_exc()
+        try:
+            cmd=request.POST['actionButton']
+            sendCmdToTester('CALIBRATE/' + cmd + '/')
+            calInfo=CalibrationValues.objects.get(pk=1)
+            testerCalForm=CalibrationForm(request.POST,instance=calInfo)
+        except:
+            pass
+
     else:           
         calInfo=CalibrationValues.objects.get(pk=1)
         testerCalForm=CalibrationForm(instance=calInfo)
